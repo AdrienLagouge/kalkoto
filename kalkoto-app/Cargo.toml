@@ -1,0 +1,14 @@
+[package]
+name = "kalkoto-app"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+kalkoto-lib = { path = "../kalkoto-lib" }
+dioxus-web = "0.6.0"
+dioxus = "0.6.0"
+wasm-bindgen = "0.2.99"
+
+[features]
+default = ["web"]
+web = ["dioxus/web"]
