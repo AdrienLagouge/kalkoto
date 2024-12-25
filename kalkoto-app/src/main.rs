@@ -1,7 +1,7 @@
 #![allow(non_snake_case)]
 // Import the Dioxus prelude to gain access to the `rsx!` macro and the `Scope` and `Element` types.
 use dioxus::prelude::*;
-use kalkoto_lib::greeter;
+use kalkoto_lib::entities::menage::{Caracteristique, Menage};
 
 fn main() {
     // Launch the web application using the App component as the root.
@@ -11,18 +11,25 @@ fn main() {
 // Define a component that renders a div with constant text
 #[component]
 fn App() -> Element {
-    let libtext = greeter("TestComponent");
+    let mut test_menage = Menage::new(1);
+    test_menage.caracteristiques.insert(
+        "Name".to_owned(),
+        Caracteristique::Textuel("Jeannot".to_owned()),
+    );
+    test_menage
+        .caracteristiques
+        .insert("Age".to_owned(), Caracteristique::Entier(35));
     rsx! {
         div {
             "Coucou de mon appli Simulaction Sociale !"
         }
-    TestComponentWithProps {name: libtext}
+    TestComponentWithProps {menage: test_menage}
     }
 }
 
 #[component]
-fn TestComponentWithProps(name: String) -> Element {
+fn TestComponentWithProps(menage: Menage) -> Element {
     rsx! {
-        "Texte issu de la librairie. {name}"
+        "Exposition des entités de la librairie. Exemple :\n {menage}"
     }
 }

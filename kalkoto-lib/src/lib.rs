@@ -1,15 +1,8 @@
-pub fn greeter(name: &str) -> String {
-    let output = format!("Call from kalkoto-lib : {}", name);
-    output
-}
+#![allow(unused)]
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+pub mod adapters;
+pub mod entities;
+pub mod errors;
+pub mod prelude;
 
-    #[test]
-    fn it_works() {
-        let result = greeter("TestName");
-        assert_eq!(result, "Call from kalkoto-lib : TestName".to_owned());
-    }
-}
+use crate::prelude::*;
