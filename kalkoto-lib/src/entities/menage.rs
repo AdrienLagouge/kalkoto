@@ -35,23 +35,28 @@ impl Menage {
         }
     }
 
-    pub fn compare_type_carac(&self, other_menage: &Self) -> (bool, i32) {
+    pub fn compare_type_carac(&self, other_menage: &Self) -> (bool, i32, String) {
         let mut validator = true;
         let mut fault_index = -1;
+        let mut fault_key = "".to_string();
+
         for (nom_carac, type_carac) in &self.caracteristiques {
             match other_menage.caracteristiques.get(nom_carac) {
                 Some(other_type_carac) => {
                     validator = validator
                         && (mem::discriminant(type_carac) == mem::discriminant(other_type_carac))
                 }
-                None => validator = false,
+                None => {
+                    validator = false;
+                    fault_key = nom_carac.clone();
+                }
             }
             if !validator {
                 fault_index = self.index;
-                return (false, fault_index);
+                return (validator, fault_index, fault_key);
             }
         }
-        (validator, fault_index)
+        (validator, fault_index, fault_key)
     }
 }
 
@@ -71,7 +76,7 @@ mod tests {
 
     #[test]
     fn ok_compar_carac() {
-        let wanted = (true, -1);
+        let wanted = (true, -1, "".to_string());
 
         let mut first_menage = Menage::new(1);
         first_menage
@@ -97,7 +102,7 @@ mod tests {
 
     #[test]
     fn unmatched_types_compar_carac() {
-        let wanted = (false, 1);
+        let wanted = (false, 1, "".to_string());
 
         let mut first_menage = Menage::new(1);
         first_menage
@@ -122,8 +127,8 @@ mod tests {
     }
 
     #[test]
-    fn unmatched_carac_compar_carac() {
-        let wanted = (false, 1);
+    fn unmatched_nom_compar_carac() {
+        let wanted = (false, 1, "TypeLogement".to_string());
 
         let mut first_menage = Menage::new(1);
         first_menage

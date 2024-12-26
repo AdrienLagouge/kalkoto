@@ -10,8 +10,12 @@ pub enum MenageListAdapterError {
     #[error("Erreur à la lecture du stream d'input")]
     IO(#[from] std::io::Error),
 
-    #[error("Erreur à la validation de la liste des cas-types pour les ménages {} et {}. Cause : {}",.0,.0+1,.1)]
-    ValidationError(i32, String),
+    #[error("Erreur à la validation de la liste des cas-types pour les ménages {} et {}.\nCause : {}.\nConseil : {}",.fault_index,.fault_index+1,.cause,.conseil)]
+    ValidationError {
+        fault_index: i32,
+        cause: String,
+        conseil: String,
+    },
 }
 
 impl Debug for MenageListAdapterError {
@@ -24,7 +28,7 @@ impl Debug for MenageListAdapterError {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct MenageInput {
     liste_menage_valide: Vec<Menage>,
 }
@@ -34,15 +38,15 @@ pub struct MenageInput {
 pub trait MenageListAdapter {
     fn create_valid_menage_input(
         &self,
-        empty_menage_input: MenageInputBuilder<Empty>,
+        empty_menage_input: MenageInputBuilder<EmptyList>,
     ) -> Result<MenageInput, MenageListAdapterError>;
 }
 
-#[derive(Default, Clone)]
-pub struct Empty;
-#[derive(Default, Clone)]
+#[derive(Default, Debug, Clone)]
+pub struct EmptyList;
+#[derive(Debug, Clone)]
 pub struct Unvalid(Vec<Menage>);
-#[derive(Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct Valid(Vec<Menage>);
 
 #[derive(Debug, Clone, Default)]
@@ -50,7 +54,7 @@ pub struct MenageInputBuilder<U> {
     liste_menage: U,
 }
 
-impl MenageInputBuilder<Empty> {
+impl MenageInputBuilder<EmptyList> {
     pub fn new() -> Self {
         MenageInputBuilder::default()
     }
@@ -73,6 +77,14 @@ impl MenageInputBuilder<Unvalid> {
     ) -> Result<MenageInputBuilder<Valid>, MenageListAdapterError> {
         let unvalidated_liste_menage = &self.liste_menage.0;
 
+        if unvalidated_liste_menage.is_empty() {
+            return Err(MenageListAdapterError::ValidationError {
+                fault_index: -1,
+                cause: "La liste de ménages à valider est vide.".to_string(),
+                conseil: "Vérifier le fichier d'input".to_string(),
+            });
+        }
+
         let mut first_faulty_menage: Vec<_> = unvalidated_liste_menage
             .iter()
             .tuple_windows::<(&Menage, &Menage)>()
@@ -82,11 +94,12 @@ impl MenageInputBuilder<Unvalid> {
             .collect();
 
         if let Some(menage) = first_faulty_menage.pop() {
-            return Err(MenageListAdapterError::ValidationError(
-                menage.index,
-                "Les types des caractéristiques de ces deux ménages ne correspondent pas"
+            return Err(MenageListAdapterError::ValidationError {
+                fault_index: menage.index,
+                cause: "Les types ou les noms des caractéristiques de ces deux ménages ne correspondent pas"
                     .to_owned(),
-            ));
+                conseil: "Vérifier le fichier d'input".to_owned(),
+            });
         };
 
         let validated_liste_menage = unvalidated_liste_menage.clone();
@@ -103,5 +116,105 @@ impl MenageInputBuilder<Valid> {
         MenageInput {
             liste_menage_valide: liste_menage_valide.clone(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+    use crate::entities::menage::*;
+
+    #[test]
+    fn ok_valid_input() {
+        let mut first_menage = Menage::new(1);
+        first_menage
+            .caracteristiques
+            .insert(String::from("Age"), Caracteristique::Entier(30));
+
+        first_menage
+            .caracteristiques
+            .insert(String::from("Revenu"), Caracteristique::Numeric(100.0f64));
+
+        let mut second_menage = Menage::new(2);
+        second_menage
+            .caracteristiques
+            .insert(String::from("Age"), Caracteristique::Entier(35));
+
+        second_menage
+            .caracteristiques
+            .insert(String::from("Revenu"), Caracteristique::Numeric(200.0f64));
+
+        let mut third_menage = Menage::new(3);
+        third_menage
+            .caracteristiques
+            .insert(String::from("Age"), Caracteristique::Entier(40));
+
+        third_menage
+            .caracteristiques
+            .insert(String::from("Revenu"), Caracteristique::Numeric(300.0f64));
+
+        let valide_menage_list = vec![first_menage, second_menage, third_menage];
+
+        let wanted = MenageInput {
+            liste_menage_valide: valide_menage_list.clone(),
+        };
+
+        let result = MenageInputBuilder::<EmptyList>::new()
+            .from_unvalidated_liste_menage(valide_menage_list)
+            .validate_liste_menage()
+            .unwrap()
+            .build_valide_menage_input();
+        assert_eq!(wanted, result);
+    }
+
+    #[test]
+    fn err_invalid_input() {
+        let mut first_menage = Menage::new(1);
+        first_menage
+            .caracteristiques
+            .insert(String::from("Age"), Caracteristique::Entier(30));
+
+        first_menage
+            .caracteristiques
+            .insert(String::from("Revenu"), Caracteristique::Numeric(100.0f64));
+
+        let mut second_menage = Menage::new(2);
+        second_menage
+            .caracteristiques
+            .insert(String::from("Age"), Caracteristique::Entier(35));
+
+        second_menage
+            .caracteristiques
+            .insert(String::from("Revenu"), Caracteristique::Numeric(200.0f64));
+
+        let mut third_menage = Menage::new(3);
+        third_menage.caracteristiques.insert(
+            String::from("Age"),
+            Caracteristique::Textuel("40".to_string()),
+        );
+
+        third_menage
+            .caracteristiques
+            .insert(String::from("Revenu"), Caracteristique::Numeric(300.0f64));
+
+        let invalid_menage_list = vec![first_menage, second_menage, third_menage];
+
+        let wanted = true;
+        let mut result = MenageInputBuilder::<EmptyList>::new()
+            .from_unvalidated_liste_menage(invalid_menage_list.clone())
+            .validate_liste_menage()
+            .is_err();
+        assert_eq!(wanted, result);
+    }
+
+    #[test]
+    fn err_empty_list() {
+        let wanted = true;
+        let result = MenageInputBuilder::<EmptyList>::new()
+            .from_unvalidated_liste_menage(vec![])
+            .validate_liste_menage()
+            .is_err();
+        assert_eq!(wanted, result);
     }
 }
