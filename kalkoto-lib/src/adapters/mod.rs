@@ -26,7 +26,16 @@ impl Debug for MenageListAdapterError {
 
 #[derive(Debug, Clone)]
 pub struct MenageInput {
-    liste_menage: Vec<Menage>,
+    liste_menage_valide: Vec<Menage>,
+}
+
+// Trait commun à tous les adapteurs de création d'une liste de ménages dont toutes
+// les caractéristiques ont été vérifiées
+pub trait MenageListAdapter {
+    fn create_valid_menage_input(
+        &self,
+        empty_menage_input: MenageInputBuilder<Empty>,
+    ) -> Result<MenageInput, MenageListAdapterError>;
 }
 
 #[derive(Default, Clone)]
@@ -88,13 +97,11 @@ impl MenageInputBuilder<Unvalid> {
     }
 }
 
-// impl<Valid> MenageInputBuilder<Valid>{
-//     pub fn build(self) -> Result<MenageInput,MenageListAdapterError> {
-// let Some(liste_menage_valide) = self.liste_menage_valide else {
-//         return Err(MenageListAdapterError::MissingBufferError("Pas de stream fourni !".to_owned())};
-//     }
-// }
-
-// pub trait MenageListAdapter {
-//     fn validate_menage_input(&self) -> Result<ValidatedMenageInput, MenageListAdapterError>;
-// }
+impl MenageInputBuilder<Valid> {
+    pub fn build_valide_menage_input(self) -> MenageInput {
+        let liste_menage_valide = self.liste_menage.0;
+        MenageInput {
+            liste_menage_valide: liste_menage_valide.clone(),
+        }
+    }
+}
