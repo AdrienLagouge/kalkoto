@@ -10,9 +10,6 @@ pub enum WorkflowError {
 
     //    #[error("Problème lors de la création de la politique publique")]
     //   PolicyError(#[from] crate::adapters::PolicyAdapterError),
-    #[error(transparent)]
-    IO(#[from] std::io::Error),
-
     #[error("Erreur inconnue")]
     Unknown,
 }

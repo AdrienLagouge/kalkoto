@@ -7,7 +7,7 @@ use std::mem;
 //#[derive(IntoPyObject)]
 #[derive(Clone, Debug, PartialEq)]
 pub enum Caracteristique {
-    Entier(i16),
+    Entier(i32),
     Numeric(f64),
     Textuel(String),
 }
@@ -21,22 +21,23 @@ impl fmt::Display for Caracteristique {
         }
     }
 }
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct Menage {
-    pub index: i16,
+    pub index: i32,
     pub caracteristiques: HashMap<String, Caracteristique>,
 }
 
 impl Menage {
-    pub fn new(index: i16) -> Self {
+    pub fn new(index: i32) -> Self {
         Self {
             index,
             caracteristiques: HashMap::new(),
         }
     }
 
-    pub fn compare_type_carac(&self, other_menage: &Self) -> bool {
+    pub fn compare_type_carac(&self, other_menage: &Self) -> (bool, i32) {
         let mut validator = true;
+        let mut fault_index = -1;
         for (nom_carac, type_carac) in &self.caracteristiques {
             match other_menage.caracteristiques.get(nom_carac) {
                 Some(other_type_carac) => {
@@ -46,10 +47,11 @@ impl Menage {
                 None => validator = false,
             }
             if !validator {
-                return false;
+                fault_index = self.index;
+                return (false, fault_index);
             }
         }
-        validator
+        (validator, fault_index)
     }
 }
 
@@ -69,7 +71,7 @@ mod tests {
 
     #[test]
     fn ok_compar_carac() {
-        let wanted = true;
+        let wanted = (true, -1);
 
         let mut first_menage = Menage::new(1);
         first_menage
@@ -95,7 +97,7 @@ mod tests {
 
     #[test]
     fn unmatched_types_compar_carac() {
-        let wanted = false;
+        let wanted = (false, 1);
 
         let mut first_menage = Menage::new(1);
         first_menage
@@ -121,7 +123,7 @@ mod tests {
 
     #[test]
     fn unmatched_carac_compar_carac() {
-        let wanted = false;
+        let wanted = (false, 1);
 
         let mut first_menage = Menage::new(1);
         first_menage
