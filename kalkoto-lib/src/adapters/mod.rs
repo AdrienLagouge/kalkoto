@@ -8,8 +8,8 @@ use std::{
     fmt::{write, Debug},
 };
 
-mod csv_input_adapter;
-mod toml_input_adapter;
+pub mod csv_input_adapter;
+pub mod toml_input_adapter;
 
 #[derive(thiserror::Error)]
 pub enum MenageListAdapterError {

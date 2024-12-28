@@ -1,23 +1,14 @@
-use anyhow::{anyhow, Result};
-use kalkoto_lib::adapters::*;
-use kalkoto_lib::entities::menage::*;
+use anyhow::Result;
+use kalkoto_lib::adapters::csv_input_adapter::*;
 
 fn main() -> Result<()> {
-    let mut menage_1 = Menage::new(1);
-    let mut menage_2 = Menage::new(2);
-    let mut menage_3 = Menage::new(3);
-    menage_1
-        .caracteristiques
-        .insert("Age".to_string(), Caracteristique::Entier(25));
-    menage_2
-        .caracteristiques
-        .insert("Age".to_string(), Caracteristique::Entier(35));
-    menage_3
-        .caracteristiques
-        .insert("Age".to_string(), Caracteristique::Numeric(40.0f64));
-    let valid_vec = vec![menage_1, menage_2, menage_3];
-    let test_input = MenageInputBuilder::<EmptyList>::new()
-        .from_unvalidated_liste_menage(valid_vec)
-        .validate_liste_menage()?;
+    let csv_input_adapter = CsvInputAdapter::new();
+    let mut csv_content = String::new();
+    let headers = csv_input_adapter.extract_headers_from_path(
+        "../test-input/bad_input_headers_unequal_length.csv",
+        &mut csv_content,
+    )?;
+    println!("Headers extraits du fichier : {:?}", headers);
+    println!("Contenu extrait du fichier : {:?}", csv_content);
     Ok(())
 }
