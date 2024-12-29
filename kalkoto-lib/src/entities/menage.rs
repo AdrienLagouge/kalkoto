@@ -21,6 +21,19 @@ impl fmt::Display for Caracteristique {
         }
     }
 }
+
+impl From<String> for Caracteristique {
+    fn from(string: String) -> Caracteristique {
+        if let Ok(entier) = string.parse::<i32>() {
+            Caracteristique::Entier(entier)
+        } else if let Ok(numeric) = string.parse::<f64>() {
+            Caracteristique::Numeric(numeric)
+        } else {
+            Caracteristique::Textuel(string)
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Menage {
     pub index: i32,

@@ -1,7 +1,7 @@
 //! Main Crate Error
 
 #[derive(thiserror::Error, Debug)]
-pub enum WorkflowError {
+pub enum KalkotoError {
     #[error("Erreur générique: {0}")]
     Generic(String),
 
