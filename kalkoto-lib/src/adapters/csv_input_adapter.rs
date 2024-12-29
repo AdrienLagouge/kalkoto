@@ -1,7 +1,7 @@
 use crate::adapters::{MenageListAdapter, MenageListAdapterError};
-use crate::entities::menage::Menage;
+use crate::entities::menage::{Caracteristique, Menage};
 use csv::{Reader, ReaderBuilder, StringRecord};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::{
     fs::{write, File},
@@ -34,42 +34,63 @@ impl CsvInputAdapter {
 }
 
 impl CsvInputAdapter {
-    pub fn extract_headers_from_buf(&self, input_buf: &[u8]) -> KalkotoResult<HashSet<String>> {
+    pub fn populate_from_buf(
+        &self,
+        input_buf: &[u8],
+    ) -> KalkotoResult<(HashSet<String>, Vec<Menage>)> {
         let mut rdr = ReaderBuilder::new()
             .delimiter(b';')
             .has_headers(false)
             .from_reader(input_buf);
 
-        let mut headers_row: HashSet<String> = HashSet::new();
-        {
-            if let Some(result) = rdr.records().next() {
-                let headers = result.map_err(MenageListAdapterError::from)?;
-                let first_row = rdr
-                    .records()
-                    .next()
-                    .unwrap_or(Ok(StringRecord::new()))
-                    .map_err(MenageListAdapterError::from)?;
+        let mut headers_row: Vec<String> = vec![];
+        let mut vec_menage: Vec<Menage> = vec![];
 
-                headers_row = headers
+        if let Some(result) = rdr.records().next() {
+            let headers = result.map_err(|e| MenageListAdapterError::ValidationError {
+                fault_index: -1,
+                cause: "Problème à la lecture du header du CSV".to_string(),
+                conseil: "Vérifier le fichier CSV".to_string(),
+            })?;
+
+            headers_row = headers
+                .iter()
+                .map(|str| str.to_string())
+                .collect::<Vec<String>>();
+
+            for (index, row) in rdr.records().enumerate() {
+                let caracteristiques_vec: Vec<Caracteristique> = row
+                    .map_err(|e| MenageListAdapterError::ValidationError {
+                        fault_index: index as i32,
+                        cause: "Les caractéristiques de ces ménages semblent invalides".to_string(),
+                        conseil: "Vérifier le fichier CSV".to_string(),
+                    })?
                     .iter()
                     .map(|str| str.to_string())
-                    .collect::<HashSet<String>>();
-            } else {
-                return Err(From::from(MenageListAdapterError::ValidationError {
-                    fault_index: -1,
-                    cause: "Problème à la lecture du header du CSV".to_string(),
-                    conseil: "Vérifier le fichier CSV".to_string(),
-                }));
-            };
+                    .map(Caracteristique::from)
+                    .collect();
+
+                let caracteristiques: HashMap<String, Caracteristique> = headers_row
+                    .iter()
+                    .cloned()
+                    .zip(caracteristiques_vec.iter().cloned())
+                    .collect();
+
+                let menage = Menage {
+                    index: (index as i32) + 1i32,
+                    caracteristiques,
+                };
+
+                vec_menage.push(menage);
+            }
         }
-        Ok(headers_row)
+
+        let headers_set: HashSet<String> = headers_row.into_iter().collect();
+
+        Ok((headers_set, vec_menage))
     }
 
-    pub fn extract_headers_from_path<P>(
-        &self,
-        path: P,
-        buf_string: &mut String,
-    ) -> KalkotoResult<HashSet<String>>
+    pub fn populate_from_path<P>(&self, path: P, buf_string: &mut String) -> KalkotoResult<Self>
     where
         P: AsRef<Path>,
     {
@@ -86,7 +107,34 @@ impl CsvInputAdapter {
 
         let output_slice = buf_string.as_bytes();
 
-        self.extract_headers_from_buf(output_slice)
+        let (set_caracteristiques, liste_menages) = self.populate_from_buf(output_slice)?;
+
+        Ok(CsvInputAdapter {
+            set_caracteristiques: Some(set_caracteristiques),
+            liste_menages: Some(liste_menages),
+        })
+    }
+}
+
+impl MenageListAdapter for CsvInputAdapter {
+    fn create_valid_menage_input(
+        &self,
+        empty_menage_input: super::MenageInputBuilder<super::EmptyList>,
+    ) -> KalkotoResult<super::MenageInput> {
+        match (&self.set_caracteristiques, &self.liste_menages) {
+            (Some(set_caracteristiques), Some(liste_menages)) => empty_menage_input
+                .from_unvalidated_liste_menage(liste_menages.clone())
+                .validate_liste_menage()?
+                .build_valide_menage_input(),
+            (_, _) => Err(From::from(MenageListAdapterError::ValidationError {
+                fault_index: -1,
+                cause:
+                    "Impossible de construire une liste valide de ménages à partir de fichier CSV"
+                        .to_string(),
+                conseil: "Reprendre l'ordre des étapes de construction d'un input ménages"
+                    .to_string(),
+            })),
+        }
     }
 }
 
@@ -97,22 +145,32 @@ mod tests {
     use tempdir::TempDir;
 
     #[test]
-    fn ok_csv_bytes_extract_headers() -> KalkotoResult<()> {
-        static VALID_CSV_BYTES: &[u8] = "\
-        Age;Revenu;TypeLogement
-        35;500.5;Locataire
-        "
-        .as_bytes();
+    fn ok_csv_bytes_populate() -> KalkotoResult<()> {
+        static VALID_CSV_BYTES: &[u8] = "Age;Revenu;TypeLogement\n35;500.5;Locataire".as_bytes();
 
         let mut wanted_hashset: HashSet<String> = HashSet::new();
         wanted_hashset.insert("Age".to_string());
         wanted_hashset.insert("Revenu".to_string());
         wanted_hashset.insert("TypeLogement".to_string());
 
-        let result_hashset = CsvInputAdapter::new().extract_headers_from_buf(VALID_CSV_BYTES)?;
+        let mut wanted_hashmap: HashMap<String, Caracteristique> = HashMap::new();
+        wanted_hashmap.insert("Age".to_string(), Caracteristique::Entier(35));
+        wanted_hashmap.insert("Revenu".to_string(), Caracteristique::Numeric(500.5));
+        wanted_hashmap.insert(
+            "TypeLogement".to_string(),
+            Caracteristique::Textuel("Locataire".to_string()),
+        );
+
+        let wanted_vec_menage = vec![Menage {
+            index: 1,
+            caracteristiques: wanted_hashmap,
+        }];
+
+        let (result_hashset, result_vec_menage) =
+            CsvInputAdapter::new().populate_from_buf(VALID_CSV_BYTES)?;
 
         let wanted = true;
-        let result = wanted_hashset == result_hashset;
+        let result = (wanted_hashset == result_hashset) && (wanted_vec_menage == result_vec_menage);
 
         assert_eq!(wanted, result);
 
@@ -120,7 +178,7 @@ mod tests {
     }
 
     #[test]
-    fn err_nosemicolon_csv_bytes_extract_headers() -> KalkotoResult<()> {
+    fn err_nosemicolon_headers_csv_bytes() -> KalkotoResult<()> {
         static UNVALID_CSV_BYTES: &[u8] = "\
         Age;Revenu,TypeLogement
         35;500.5;Locataire
@@ -128,7 +186,7 @@ mod tests {
         .as_bytes();
 
         let result = CsvInputAdapter::new()
-            .extract_headers_from_buf(UNVALID_CSV_BYTES)
+            .populate_from_buf(UNVALID_CSV_BYTES)
             .is_err();
 
         let wanted = true;
@@ -139,7 +197,7 @@ mod tests {
     }
 
     #[test]
-    fn err_unequal_length_csv_bytes_extract_headers() -> KalkotoResult<()> {
+    fn err_unequal_length_headerscsv_bytes() -> KalkotoResult<()> {
         static UNVALID_CSV_BYTES: &[u8] = "\
         Age;Revenu
         35;500.5;Locataire
@@ -147,7 +205,7 @@ mod tests {
         .as_bytes();
 
         let result = CsvInputAdapter::new()
-            .extract_headers_from_buf(UNVALID_CSV_BYTES)
+            .populate_from_buf(UNVALID_CSV_BYTES)
             .is_err();
 
         let wanted = true;
@@ -158,29 +216,42 @@ mod tests {
     }
 
     #[test]
-    fn ok_csv_file_extract_headers() -> KalkotoResult<()> {
-        static VALID_CSV_CONTENT: &str = "\
-        Age;Revenu;TypeLogement
-        35;500.5;Locataire
-        ";
+    fn ok_csv_file_populate() -> KalkotoResult<()> {
+        static VALID_CSV_BYTES: &[u8] = "Age;Revenu;TypeLogement\n35;500.5;Locataire".as_bytes();
 
         let tmp_dir = TempDir::new("test-input").map_err(MenageListAdapterError::IO)?;
         let file_path = tmp_dir.path().join("valid_csv.csv");
         let mut tmp_file = File::create(&file_path).map_err(MenageListAdapterError::IO)?;
-        fs::write(&file_path, VALID_CSV_CONTENT).map_err(MenageListAdapterError::IO)?;
+        fs::write(&file_path, VALID_CSV_BYTES).map_err(MenageListAdapterError::IO)?;
 
         let mut wanted_hashset: HashSet<String> = HashSet::new();
         wanted_hashset.insert("Age".to_string());
         wanted_hashset.insert("Revenu".to_string());
         wanted_hashset.insert("TypeLogement".to_string());
 
+        let mut wanted_hashmap: HashMap<String, Caracteristique> = HashMap::new();
+        wanted_hashmap.insert("Age".to_string(), Caracteristique::Entier(35));
+        wanted_hashmap.insert("Revenu".to_string(), Caracteristique::Numeric(500.5));
+        wanted_hashmap.insert(
+            "TypeLogement".to_string(),
+            Caracteristique::Textuel("Locataire".to_string()),
+        );
+
+        let wanted_vec_menage = vec![Menage {
+            index: 1,
+            caracteristiques: wanted_hashmap,
+        }];
+
         let mut csv_content = String::new();
-        let result_hashset =
-            CsvInputAdapter::new().extract_headers_from_path(file_path, &mut csv_content)?;
+        let CsvInputAdapter {
+            set_caracteristiques: result_hashset,
+            liste_menages: result_vec_menage,
+        } = CsvInputAdapter::new().populate_from_path(file_path, &mut csv_content)?;
 
         let wanted = true;
-        let result = wanted_hashset == result_hashset;
 
+        let result = (wanted_hashset == result_hashset.unwrap())
+            && (wanted_vec_menage == result_vec_menage.unwrap());
         assert_eq!(wanted, result);
 
         drop(tmp_file);
@@ -190,10 +261,34 @@ mod tests {
     }
 
     #[test]
-    fn err_csv_not_valid_file_extract_headers() -> KalkotoResult<()> {
+    fn err_csv_not_valid_file_path() -> KalkotoResult<()> {
         let mut csv_content = String::new();
         let result = CsvInputAdapter::new()
-            .extract_headers_from_path("nonexistent_file.csv", &mut csv_content)
+            .populate_from_path("nonexistent_file.csv", &mut csv_content)
+            .is_err();
+
+        let wanted = true;
+
+        assert_eq!(wanted, result);
+
+        Ok(())
+    }
+
+    #[test]
+    fn err_csv_file_invalid_row() -> KalkotoResult<()> {
+        static UNVALID_CSV_CONTENT: &str = "\
+        Age;Revenu;TypeLogement
+        35,500.5;Locataire
+        ";
+
+        let tmp_dir = TempDir::new("test-input").map_err(MenageListAdapterError::IO)?;
+        let file_path = tmp_dir.path().join("valid_csv.csv");
+        let mut tmp_file = File::create(&file_path).map_err(MenageListAdapterError::IO)?;
+        fs::write(&file_path, UNVALID_CSV_CONTENT).map_err(MenageListAdapterError::IO)?;
+
+        let mut csv_content = String::new();
+        let result = CsvInputAdapter::new()
+            .populate_from_path(file_path, &mut csv_content)
             .is_err();
 
         let wanted = true;

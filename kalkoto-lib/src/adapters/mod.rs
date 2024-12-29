@@ -40,13 +40,19 @@ pub struct MenageInput {
     liste_menage_valide: Vec<Menage>,
 }
 
+impl MenageInput {
+    pub fn get_valid_input_menages(self) -> (HashSet<String>,Vec<Menage>) {
+        (self.set_caracteristiques_valide,self.liste_menage_valide)
+    }
+}
+
 // Trait commun à tous les adapteurs de création d'une liste de ménages dont toutes
 // les caractéristiques ont été vérifiées
 pub trait MenageListAdapter {
     fn create_valid_menage_input(
         &self,
         empty_menage_input: MenageInputBuilder<EmptyList>,
-    ) -> Result<MenageInput, MenageListAdapterError>;
+    ) -> KalkotoResult<MenageInput>;
 }
 
 #[derive(Default, Debug, Clone)]
@@ -82,7 +88,6 @@ impl<U> MenageInputBuilder<U> {
 
 impl MenageInputBuilder<Unvalid> {
     pub fn validate_liste_menage(self) -> KalkotoResult<MenageInputBuilder<Valid>> {
-        //Result<MenageInputBuilder<Valid>, MenageListAdapterError>
         let unvalidated_liste_menage = &self.liste_menage.0;
 
         if unvalidated_liste_menage.is_empty() {
