@@ -37,10 +37,10 @@ impl Debug for MenageListAdapterError {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq,Default)]
 pub struct MenageInput {
-    set_caracteristiques_valide: HashSet<String>,
-    liste_menage_valide: Vec<Menage>,
+   pub set_caracteristiques_valide: HashSet<String>,
+   pub liste_menage_valide: Vec<Menage>,
 }
 
 impl MenageInput {
@@ -172,8 +172,9 @@ impl From<String> for PolicyAdapterError {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct PolicyInput {
-    valid_policy: Policy
+    pub valid_policy: Policy
 }
 
 impl Display for PolicyInput {

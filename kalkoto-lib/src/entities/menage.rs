@@ -1,11 +1,9 @@
-//use pyo3::prelude::*;
-//use pyo3_ffi::c_str;
+use pyo3::prelude::*;
 use std::collections::HashMap;
 use std::fmt;
 use std::mem;
 
-//#[derive(IntoPyObject)]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(IntoPyObject, Clone, Debug, PartialEq)]
 pub enum Caracteristique {
     Entier(i32),
     Numeric(f64),
