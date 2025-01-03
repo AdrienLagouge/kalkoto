@@ -1,11 +1,14 @@
-use crate::entities::menage::Menage;
+use crate::entities::menage::*;
+use crate::entities::policy::*;
 use crate::prelude::*;
 
 use itertools::Itertools;
+use std::fmt::Display;
+use std::fs::write;
 use std::{
     collections::HashSet,
     error::Error,
-    fmt::{write, Debug},
+    fmt::{Debug},
 };
 
 pub mod csv_input_adapter;
@@ -43,6 +46,14 @@ pub struct MenageInput {
 impl MenageInput {
     pub fn get_valid_input_menages(self) -> (HashSet<String>,Vec<Menage>) {
         (self.set_caracteristiques_valide,self.liste_menage_valide)
+    }
+}
+
+impl Display for MenageInput {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f,"Input Ménages correctement initialisé !\n")?;
+        writeln!(f, "Liste des caractéristiques trouvées dans l'input :\n{:?}", self.set_caracteristiques_valide)?;
+        writeln!(f, "Exemple du premier ménage trouvé dans l'input :\n{:?}", self.liste_menage_valide[0])
     }
 }
 
@@ -141,6 +152,45 @@ impl MenageInputBuilder<Valid> {
         Err(From::from(MenageListAdapterError::ValidationError { fault_index: -1 
             , cause: "La liste des caractéristiques des ménages ne peut pas être établie à partir de la liste des ménages".to_string(), conseil: "Vérifier la liste des étapes pour construire un MenageInput".to_string()}))
     }}
+}
+
+#[derive(thiserror::Error,Debug)]
+pub enum PolicyAdapterError {
+    #[error("Erreur à l'ouverture du fichier")]
+    IO(#[from] std::io::Error),
+
+    #[error("Erreur à la lecture du fichier TOML")]
+    DeserializeError(#[from] toml::de::Error),
+
+    #[error("Champ(s) manquant(s) ou invalide(s): {0}")]
+    Generic(String),
+}
+
+impl From<String> for PolicyAdapterError {
+    fn from(value: String) -> Self {
+        PolicyAdapterError::Generic(value)
+    }
+}
+
+pub struct PolicyInput {
+    valid_policy: Policy
+}
+
+impl Display for PolicyInput {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f,"Input Policy correctement initialisé !\n")?;
+        writeln!(f, "Politique publique à simuler  trouvée dans l'input :\n{:?}", self.valid_policy.intitule_long)?;
+        writeln!(f, "Liste ordonnée des composantes de cette politique publique :")?;
+        let composantes_names  = self.valid_policy.composantes_ordonnees.iter().map(|s| format!("- {}",s.name)).collect::<Vec<String>>().join("\n");
+        write!(f,"{}",composantes_names)
+    }
+}
+
+// Trait commun à tous les adapteurs de création d'une politique publique correctement initialisée 
+pub trait PolicyAdapter {
+    fn create_valid_policy_input(
+        &self
+    ) -> KalkotoResult<PolicyInput>;
 }
 
 #[cfg(test)]
