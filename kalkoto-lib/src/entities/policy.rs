@@ -58,7 +58,6 @@ impl Composante {
 
         variables_dict.insert(self.name.to_owned(), output);
 
-        println!("Debug -> variables_dict : {:?}", variables_dict);
         Ok(variables_dict)
     }
 }
@@ -71,4 +70,17 @@ pub struct Policy {
     pub parameters_intitules: HashMap<String, String>, //Ensemble des paramètres dont dépend la pol. publique
     pub parameters_values: HashMap<String, f64>, //Ensemble des paramètres dont dépend la pol. publique
     pub caracteristiques_menages: HashSet<String>, //Ensemble des caracteristiques dont dépend la pol. publique
+}
+
+impl Policy {
+    pub fn simulate_menage(&self, menage: &Menage) -> KalkotoResult<HashMap<String, f64>> {
+        let mut variables_dict = HashMap::<String, f64>::new();
+
+        for composante in self.composantes_ordonnees.iter() {
+            variables_dict =
+                composante.simulate_menage(menage, variables_dict, &self.parameters_values)?;
+        }
+
+        Ok(variables_dict.clone())
+    }
 }

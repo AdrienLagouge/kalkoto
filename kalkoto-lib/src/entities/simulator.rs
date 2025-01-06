@@ -1,4 +1,4 @@
-use crate::adapters::{MenageInput, PolicyInput};
+use crate::adapters::*;
 use crate::entities::menage::Menage;
 use crate::prelude::*;
 use std::collections::{HashMap, HashSet};
@@ -29,40 +29,53 @@ impl From<String> for SimulationError {
 
 #[derive(Default)]
 pub struct SimulatorBuilder<M, B, V> {
-    menage_input: M,
-    policy_baseline: B,
-    policy_variante: V,
-    results_baseline: Option<Vec<HashMap<String, f64>>>,
-    results_variante: Option<Vec<HashMap<String, f64>>>,
-    results_diff: Option<Vec<HashMap<String, f64>>>,
-    output_prefix: Option<String>,
+    pub menage_input: M,
+    pub policy_baseline: B,
+    pub policy_variante: V,
+    pub results_baseline: Option<Vec<HashMap<String, f64>>>,
+    pub results_variante: Option<Vec<HashMap<String, f64>>>,
+    pub results_diff: Option<Vec<HashMap<String, f64>>>,
+    pub output_prefix: Option<String>,
+}
+
+impl<M, B, V> SimulatorBuilder<M, B, V> {
+    pub fn add_output_prefix(self, prefix: String) -> Self {
+        Self {
+            output_prefix: Some(prefix.clone()),
+            ..self
+        }
+    }
 }
 
 #[derive(Default, Clone)]
 pub struct EmptyMenageInput;
 #[derive(Clone)]
-pub struct ValidMenageInput(MenageInput);
+pub struct ValidMenageInput(pub MenageInput);
 
 #[derive(Default, Clone)]
 pub struct EmptyBaselineInput;
 #[derive(Clone)]
-pub struct ValidBaselineInput(PolicyInput);
+pub struct ValidBaselineInput(pub PolicyInput);
 
 #[derive(Default, Clone)]
 pub struct EmptyVarianteInput;
 #[derive(Clone)]
-pub struct ValidVarianteInput(PolicyInput);
+pub struct ValidVarianteInput(pub PolicyInput);
 
 impl SimulatorBuilder<EmptyMenageInput, EmptyBaselineInput, EmptyVarianteInput> {
     pub fn new() -> Self {
         SimulatorBuilder::default()
     }
 
-    pub fn add_menage(
+    pub fn add_menage_input<M: MenageListAdapter>(
         self,
-        menage_input: MenageInput,
-    ) -> SimulatorBuilder<ValidMenageInput, EmptyBaselineInput, EmptyVarianteInput> {
-        SimulatorBuilder {
+        menage_input_adapter: &M,
+    ) -> KalkotoResult<SimulatorBuilder<ValidMenageInput, EmptyBaselineInput, EmptyVarianteInput>>
+    {
+        let start_menage_list = MenageInputBuilder::<EmptyList>::new();
+        let menage_input = menage_input_adapter.create_valid_menage_input(start_menage_list)?;
+
+        Ok(SimulatorBuilder {
             menage_input: ValidMenageInput(menage_input),
             policy_baseline: self.policy_baseline,
             policy_variante: self.policy_variante,
@@ -70,30 +83,32 @@ impl SimulatorBuilder<EmptyMenageInput, EmptyBaselineInput, EmptyVarianteInput> 
             results_variante: self.results_variante,
             results_diff: self.results_diff,
             output_prefix: self.output_prefix,
-        }
+        })
     }
 }
 
 impl SimulatorBuilder<ValidMenageInput, EmptyBaselineInput, EmptyVarianteInput> {
-    pub fn add_valid_baseline_policy(
+    pub fn add_valid_baseline_policy<P: PolicyAdapter>(
         self,
-        baseline_policy: PolicyInput,
+        baseline_policy_adapter: &P,
     ) -> KalkotoResult<SimulatorBuilder<ValidMenageInput, ValidBaselineInput, EmptyVarianteInput>>
     {
-        let intersect_caracteristiques = baseline_policy
+        let baseline_policy_input = baseline_policy_adapter.create_valid_policy_input()?;
+
+        let intersect_caracteristiques = baseline_policy_input
             .valid_policy
             .caracteristiques_menages
             .intersection(&self.menage_input.0.set_caracteristiques_valide)
             .cloned()
             .collect::<HashSet<String>>();
 
-        let is_valid =
-            intersect_caracteristiques == baseline_policy.valid_policy.caracteristiques_menages;
+        let is_valid = intersect_caracteristiques
+            == baseline_policy_input.valid_policy.caracteristiques_menages;
 
         match is_valid {
             true => Ok(SimulatorBuilder {
                 menage_input: self.menage_input,
-                policy_baseline: ValidBaselineInput(baseline_policy),
+                policy_baseline: ValidBaselineInput(baseline_policy_input),
                 policy_variante: self.policy_variante,
                 results_baseline: self.results_baseline,
                 results_variante: self.results_variante,
@@ -105,27 +120,49 @@ impl SimulatorBuilder<ValidMenageInput, EmptyBaselineInput, EmptyVarianteInput> 
     }
 }
 
+impl<E> SimulatorBuilder<ValidMenageInput, ValidBaselineInput, E> {
+    pub fn simulate_baseline_policy(self) -> KalkotoResult<Self> {
+        let results: KalkotoResult<Vec<HashMap<String, f64>>> = self
+            .menage_input
+            .0
+            .liste_menage_valide
+            .iter()
+            .map(|menage| self.policy_baseline.0.valid_policy.simulate_menage(menage))
+            .collect();
+
+        match results {
+            Ok(results) => Ok(Self {
+                results_baseline: Some(results.clone()),
+                ..self
+            }),
+            Err(e) => Err(e),
+        }
+    }
+}
+
 impl SimulatorBuilder<ValidMenageInput, ValidBaselineInput, EmptyVarianteInput> {
-    pub fn add_valid_variante_policy(
+    pub fn add_valid_variante_policy<P: PolicyAdapter>(
         self,
-        variante_policy: PolicyInput,
+        variante_policy_adapter: &P,
     ) -> KalkotoResult<SimulatorBuilder<ValidMenageInput, ValidBaselineInput, ValidVarianteInput>>
     {
-        let intersect_caracteristiques = variante_policy
+        let variante_policy_input = variante_policy_adapter.create_valid_policy_input()?;
+
+        let intersect_caracteristiques = variante_policy_input
             .valid_policy
             .caracteristiques_menages
             .intersection(&self.menage_input.0.set_caracteristiques_valide)
             .cloned()
             .collect::<HashSet<String>>();
 
-        let is_valid =
-            intersect_caracteristiques == variante_policy.valid_policy.caracteristiques_menages;
+        let is_valid = intersect_caracteristiques
+            == variante_policy_input.valid_policy.caracteristiques_menages;
 
         match is_valid {
             true => Ok(SimulatorBuilder {
                 menage_input: self.menage_input,
                 policy_baseline: self.policy_baseline,
-                policy_variante: ValidVarianteInput(variante_policy),
+                policy_variante: ValidVarianteInput(variante_policy_input),
                 results_baseline: self.results_baseline,
                 results_variante: self.results_variante,
                 results_diff: self.results_diff,
@@ -133,5 +170,44 @@ impl SimulatorBuilder<ValidMenageInput, ValidBaselineInput, EmptyVarianteInput> 
             }),
             _ => Err(SimulationError::from("Les caractéristiques dont dépend la politique variante sont plus larges que celles présentes dans le fichier ménages".to_string()).into()),
         }
+    }
+}
+
+impl SimulatorBuilder<ValidMenageInput, ValidBaselineInput, ValidVarianteInput> {
+    pub fn simulate_variante_policy(self) -> KalkotoResult<Self> {
+        let results: KalkotoResult<Vec<HashMap<String, f64>>> = self
+            .menage_input
+            .0
+            .liste_menage_valide
+            .iter()
+            .map(|menage| self.policy_variante.0.valid_policy.simulate_menage(menage))
+            .collect();
+
+        let results = match results {
+            Ok(results) => results,
+            Err(e) => return Err(e),
+        };
+
+        let mut diff_results = vec![];
+
+        for (baseline_result, variante_result) in
+            self.results_baseline.into_iter().zip(results.into_iter())
+        {
+            let diff_map = HashMap::<String, f64>::new();
+            for (name, value) in &baseline_result {
+                let diff = value
+                    - &results.get(name).ok_or(SimulationError::from(
+                        "Variante non encore calculée".to_string(),
+                    ));
+                diff_map.insert(name, diff);
+            }
+            diff_results.push(diff_map);
+        }
+
+        Ok(Self {
+            results_variante: Some(results),
+            results_diff: Some(diff_results),
+            ..self
+        })
     }
 }

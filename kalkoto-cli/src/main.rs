@@ -1,34 +1,43 @@
 use anyhow::Result;
 use kalkoto_lib::adapters::csv_input_adapter::*;
 use kalkoto_lib::adapters::*;
-use std::collections::HashMap;
+use kalkoto_lib::entities::simulator::{
+    EmptyBaselineInput, EmptyMenageInput, EmptyVarianteInput, SimulatorBuilder,
+};
+
 use toml_input_adapter::TomlInputAdapter;
 
 fn main() -> Result<()> {
-    let csv_input_adapter = CsvInputAdapter::new();
-    let mut csv_content = String::new();
-    let potential_csv_input_adapter =
-        csv_input_adapter.populate_from_path("../test-input/good_input.csv", &mut csv_content)?;
-    let menage_input = MenageInputBuilder::<EmptyList>::new();
-    let menage_input = potential_csv_input_adapter.create_valid_menage_input(menage_input)?;
-    //let (valid_carac_set, valid_liste_menage) = menage_input.get_valid_input_menages();
-    //println!("Headers extraits du fichier : {:?}", valid_carac_set);
-    println!("Menages extraits du fichier CSV: {}", menage_input);
+    let sim_builder =
+        SimulatorBuilder::<EmptyMenageInput, EmptyBaselineInput, EmptyVarianteInput>::new();
 
-    let toml_input_adapter = TomlInputAdapter::new("../test-input/good_input.toml");
-    let policy_input = &toml_input_adapter.create_valid_policy_input()?;
+    let sim_builder = sim_builder.add_output_prefix("test".to_string());
+
+    let mut csv_input_adapter = CsvInputAdapter::new();
+    let mut csv_content = String::new();
+    csv_input_adapter =
+        csv_input_adapter.populate_from_path("../test-input/good_input.csv", &mut csv_content)?;
+
+    let sim_builder = sim_builder.add_menage_input(&csv_input_adapter)?;
     println!(
-        "Politique publique extraite du fichier TOML : {}",
-        policy_input
+        "Menages extraits du fichier CSV: {}",
+        sim_builder.menage_input.0
     );
 
-    let composante_1 = &policy_input.valid_policy.composantes_ordonnees[0];
-    let composante_2 = &policy_input.valid_policy.composantes_ordonnees[1];
-    let menage_1 = menage_input.liste_menage_valide[0].clone();
-    let parameters_dict = policy_input.valid_policy.parameters_values.clone();
-    let variables_dict = HashMap::new();
-    let variables_dict =
-        composante_1.simulate_menage(&menage_1, variables_dict, &parameters_dict)?;
-    let _ = composante_2.simulate_menage(&menage_1, variables_dict, &parameters_dict)?;
+    let toml_input_adapter = TomlInputAdapter::new("../test-input/good_input.toml");
+
+    let sim_builder = sim_builder.add_valid_baseline_policy(&toml_input_adapter)?;
+
+    println!(
+        "Politique publique extraite du fichier TOML : {}",
+        sim_builder.policy_baseline.0
+    );
+
+    let sim_builder = sim_builder.simulate_baseline_policy()?;
+
+    println!(
+        "->>>> Debug results : {:?}",
+        sim_builder.results_baseline.unwrap()
+    );
     Ok(())
 }
