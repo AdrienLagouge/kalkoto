@@ -21,23 +21,43 @@ fn main() -> Result<()> {
     let sim_builder = sim_builder.add_menage_input(&csv_input_adapter)?;
     println!(
         "Menages extraits du fichier CSV: {}",
-        sim_builder.menage_input.0
+        &sim_builder.menage_input.0
     );
 
-    let toml_input_adapter = TomlInputAdapter::new("../test-input/good_input.toml");
+    let toml_input_adapter_baseline = TomlInputAdapter::new("../test-input/good_input.toml");
 
-    let sim_builder = sim_builder.add_valid_baseline_policy(&toml_input_adapter)?;
+    let sim_builder = sim_builder.add_valid_baseline_policy(&toml_input_adapter_baseline)?;
 
     println!(
         "Politique publique extraite du fichier TOML : {}",
-        sim_builder.policy_baseline.0
+        &sim_builder.policy_baseline.0
     );
 
     let sim_builder = sim_builder.simulate_baseline_policy()?;
 
     println!(
-        "->>>> Debug results : {:?}",
-        sim_builder.results_baseline.unwrap()
+        "->>>> Debug results baseline: {:?}\n",
+        &sim_builder.results_baseline
+    );
+
+    let toml_input_adapter_variante =
+        TomlInputAdapter::new("../test-input/good_input_variante.toml");
+
+    let sim_builder = sim_builder.add_valid_variante_policy(&toml_input_adapter_variante)?;
+
+    println!(
+        "Variante extraite du fichier TOML : {}\n",
+        &sim_builder.policy_variante.0
+    );
+
+    let sim_builder = sim_builder.simulate_variante_policy()?;
+    println!(
+        "->>>> Debug results variante : {:?}\n",
+        &sim_builder.results_variante
+    );
+    println!(
+        "->>>> Debug results diff : {:?}\n",
+        &sim_builder.results_diff
     );
     Ok(())
 }

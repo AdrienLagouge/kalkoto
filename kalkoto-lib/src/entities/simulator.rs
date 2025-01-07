@@ -4,17 +4,6 @@ use crate::prelude::*;
 use std::collections::{HashMap, HashSet};
 use std::fmt::write;
 
-#[derive(Debug)]
-pub struct Simulator {
-    menage_input: MenageInput,
-    policy_baseline: PolicyInput,
-    policy_variante: Option<PolicyInput>,
-    results_baseline: Vec<HashMap<String, f64>>,
-    results_variante: Option<Vec<HashMap<String, f64>>>,
-    results_diff: Option<Vec<HashMap<String, f64>>>,
-    output_prefix: Option<String>,
-}
-
 #[derive(thiserror::Error, Debug)]
 pub enum SimulationError {
     #[error("Erreur à la mise en cohérence ménages/policy : {0}")]
@@ -190,16 +179,23 @@ impl SimulatorBuilder<ValidMenageInput, ValidBaselineInput, ValidVarianteInput> 
 
         let mut diff_results = vec![];
 
-        for (baseline_result, variante_result) in
-            self.results_baseline.into_iter().zip(results.into_iter())
+        for (baseline_result, variante_result) in self
+            .results_baseline
+            .clone()
+            .ok_or(SimulationError::from(
+                "Baseline pas encore calculée !".to_string(),
+            ))?
+            .iter()
+            .zip(results.iter())
         {
-            let diff_map = HashMap::<String, f64>::new();
-            for (name, value) in &baseline_result {
-                let diff = value
-                    - &results.get(name).ok_or(SimulationError::from(
-                        "Variante non encore calculée".to_string(),
-                    ));
-                diff_map.insert(name, diff);
+            let mut diff_map = HashMap::<String, f64>::new();
+
+            for (name, baseline_value) in baseline_result {
+                let var_value = *variante_result.get(name).ok_or(SimulationError::from(
+                    "Variante non encore calculée".to_string(),
+                ))?;
+                let diff = baseline_value - var_value;
+                diff_map.insert(name.clone(), diff);
             }
             diff_results.push(diff_map);
         }
