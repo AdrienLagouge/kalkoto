@@ -1,63 +1,87 @@
 use anyhow::Result;
+use clap::Parser;
+use crossterm::style::Stylize;
 use kalkoto_lib::adapters::csv_input_adapter::*;
 use kalkoto_lib::adapters::*;
 use kalkoto_lib::entities::simulator::{
     EmptyBaselineInput, EmptyMenageInput, EmptyVarianteInput, SimulatorBuilder,
 };
-
 use toml_input_adapter::TomlInputAdapter;
 
+#[derive(Parser)]
+#[command(author,version,about,long_about = None)]
+struct Args {
+    #[arg(short, long, value_name = "Fichier ménages")]
+    menage_input: String,
+
+    #[arg(short, long, value_name = "Fichier politique publique de référence")]
+    baseline_policy_input: String,
+
+    #[arg(short, long, value_name = "Fichier politique publique de variante")]
+    variante_policy_input: Option<String>,
+
+    #[arg(short, long, value_name = "Préfixe pour les fichiers de sortie")]
+    prefix: Option<String>,
+}
+
 fn main() -> Result<()> {
-    let sim_builder =
+    let mut sim_builder =
         SimulatorBuilder::<EmptyMenageInput, EmptyBaselineInput, EmptyVarianteInput>::new();
 
-    let sim_builder = sim_builder.add_output_prefix("test".to_string());
+    let args = Args::parse();
+
+    if let Some(prefix) = args.prefix.as_deref() {
+        sim_builder = sim_builder.add_output_prefix(prefix.to_string())
+    }
 
     let mut csv_input_adapter = CsvInputAdapter::new();
     let mut csv_content = String::new();
     csv_input_adapter =
-        csv_input_adapter.populate_from_path("../test-input/good_input.csv", &mut csv_content)?;
+        csv_input_adapter.populate_from_path(&args.menage_input, &mut csv_content)?;
 
     let sim_builder = sim_builder.add_menage_input(&csv_input_adapter)?;
-    println!(
-        "Menages extraits du fichier CSV: {}",
-        &sim_builder.menage_input.0
-    );
 
-    let toml_input_adapter_baseline = TomlInputAdapter::new("../test-input/good_input.toml");
+    println!("{}", &sim_builder.menage_input.0);
+
+    let toml_input_adapter_baseline = TomlInputAdapter::new(&args.baseline_policy_input);
 
     let sim_builder = sim_builder.add_valid_baseline_policy(&toml_input_adapter_baseline)?;
 
-    println!(
-        "Politique publique extraite du fichier TOML : {}",
-        &sim_builder.policy_baseline.0
-    );
+    println!("{}", &sim_builder.policy_baseline.0);
 
     let sim_builder = sim_builder.simulate_baseline_policy()?;
 
     println!(
-        "->>>> Debug results baseline: {:?}\n",
-        &sim_builder.results_baseline
+        "{}",
+        "Export des résultats de la simulation baseline\n"
+            .blue()
+            .bold()
+            .underlined()
     );
 
-    let toml_input_adapter_variante =
-        TomlInputAdapter::new("../test-input/good_input_variante.toml");
+    sim_builder.export_baseline_results_csv()?;
 
-    let sim_builder = sim_builder.add_valid_variante_policy(&toml_input_adapter_variante)?;
+    // let toml_input_adapter_variante =
+    //     TomlInputAdapter::new("../test-input/good_input_variante.toml");
 
-    println!(
-        "Variante extraite du fichier TOML : {}\n",
-        &sim_builder.policy_variante.0
-    );
+    // sim_builder = sim_builder.add_valid_variante_policy(&toml_input_adapter_variante)?;
 
-    let sim_builder = sim_builder.simulate_variante_policy()?;
-    println!(
-        "->>>> Debug results variante : {:?}\n",
-        &sim_builder.results_variante
-    );
-    println!(
-        "->>>> Debug results diff : {:?}\n",
-        &sim_builder.results_diff
-    );
+    // println!(
+    //     "Variante extraite du fichier TOML : {}\n",
+    //     &sim_builder.policy_variante.0
+    // );
+
+    // sim_builder = sim_builder.simulate_variante_policy()?;
+    // println!(
+    //     "->>>> Debug results variante : {:?}\n",
+    //     &sim_builder.results_variante
+    // );
+    // println!(
+    //     "->>>> Debug results diff : {:?}\n",
+    //     &sim_builder.results_diff
+    // );
+
+    // sim_builder.export_variante_results_csv()?;
+
     Ok(())
 }

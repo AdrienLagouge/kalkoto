@@ -1,13 +1,21 @@
 use crate::adapters::*;
 use crate::entities::menage::Menage;
 use crate::prelude::*;
+use csv::WriterBuilder;
 use std::collections::{HashMap, HashSet};
-use std::fmt::write;
+use std::fmt::{write, Write};
+use std::vec;
 
 #[derive(thiserror::Error, Debug)]
 pub enum SimulationError {
     #[error("Erreur à la mise en cohérence ménages/policy : {0}")]
     PolicyError(String),
+
+    #[error("Erreur à l'écriture du fichier csv d'output")]
+    CsvError(#[from] csv::Error),
+
+    #[error("Erreur à l'ouverture du fichier csv d'output")]
+    IOError(#[from] std::io::Error),
 }
 
 impl From<String> for SimulationError {
@@ -28,7 +36,7 @@ pub struct SimulatorBuilder<M, B, V> {
 }
 
 impl<M, B, V> SimulatorBuilder<M, B, V> {
-    pub fn add_output_prefix(self, prefix: String) -> Self {
+    pub fn add_output_prefix(mut self, prefix: String) -> Self {
         Self {
             output_prefix: Some(prefix.clone()),
             ..self
@@ -110,7 +118,7 @@ impl SimulatorBuilder<ValidMenageInput, EmptyBaselineInput, EmptyVarianteInput> 
 }
 
 impl<E> SimulatorBuilder<ValidMenageInput, ValidBaselineInput, E> {
-    pub fn simulate_baseline_policy(self) -> KalkotoResult<Self> {
+    pub fn simulate_baseline_policy(mut self) -> KalkotoResult<Self> {
         let results: KalkotoResult<Vec<HashMap<String, f64>>> = self
             .menage_input
             .0
@@ -127,11 +135,64 @@ impl<E> SimulatorBuilder<ValidMenageInput, ValidBaselineInput, E> {
             Err(e) => Err(e),
         }
     }
+
+    pub fn export_baseline_results_csv(&self) -> KalkotoResult<()> {
+        let output_path = match &self.output_prefix {
+            Some(output_prefix) => format!("{}-baseline-results.csv", output_prefix),
+            _ => format!("baseline-results.csv"),
+        };
+
+        if let Some(baseline_results) = &self.results_baseline {
+            let mut wtr = WriterBuilder::new()
+                .delimiter(b';')
+                .from_path(output_path)
+                .map_err(|err| SimulationError::from(err))?;
+
+            let mut headers = self
+                .policy_baseline
+                .0
+                .valid_policy
+                .composantes_ordonnees
+                .iter()
+                .map(|composante| composante.name.clone())
+                .collect::<Vec<String>>();
+
+            headers.insert(0, "Index".to_string());
+
+            wtr.write_record(&headers);
+
+            headers.remove(0);
+
+            for (index, results_menage) in baseline_results.iter().enumerate() {
+                let mut vec_results_menage = vec![];
+                for name in headers.iter() {
+                    vec_results_menage.push(
+                        results_menage
+                            .get(name)
+                            .ok_or(SimulationError::from(
+                                "Problème de cohérence des composantes lors de l'export"
+                                    .to_string(),
+                            ))?
+                            .to_string(),
+                    );
+                }
+                vec_results_menage.insert(0, (index + 1).to_string());
+                wtr.write_record(&vec_results_menage);
+            }
+
+            wtr.flush().map_err(|err| SimulationError::from(err))?;
+            return Ok(());
+        }
+
+        Err(KalkotoError::SimError(SimulationError::from(
+            "Pas possible d'exporter : les résultats n'ont pas encore été calculés".to_string(),
+        )))
+    }
 }
 
 impl SimulatorBuilder<ValidMenageInput, ValidBaselineInput, EmptyVarianteInput> {
     pub fn add_valid_variante_policy<P: PolicyAdapter>(
-        self,
+        mut self,
         variante_policy_adapter: &P,
     ) -> KalkotoResult<SimulatorBuilder<ValidMenageInput, ValidBaselineInput, ValidVarianteInput>>
     {
@@ -163,7 +224,7 @@ impl SimulatorBuilder<ValidMenageInput, ValidBaselineInput, EmptyVarianteInput> 
 }
 
 impl SimulatorBuilder<ValidMenageInput, ValidBaselineInput, ValidVarianteInput> {
-    pub fn simulate_variante_policy(self) -> KalkotoResult<Self> {
+    pub fn simulate_variante_policy(mut self) -> KalkotoResult<Self> {
         let results: KalkotoResult<Vec<HashMap<String, f64>>> = self
             .menage_input
             .0
@@ -194,7 +255,7 @@ impl SimulatorBuilder<ValidMenageInput, ValidBaselineInput, ValidVarianteInput> 
                 let var_value = *variante_result.get(name).ok_or(SimulationError::from(
                     "Variante non encore calculée".to_string(),
                 ))?;
-                let diff = baseline_value - var_value;
+                let diff = var_value - baseline_value;
                 diff_map.insert(name.clone(), diff);
             }
             diff_results.push(diff_map);
@@ -205,5 +266,84 @@ impl SimulatorBuilder<ValidMenageInput, ValidBaselineInput, ValidVarianteInput> 
             results_diff: Some(diff_results),
             ..self
         })
+    }
+
+    pub fn export_variante_results_csv(&self) -> KalkotoResult<()> {
+        let (output_path_var, output_path_diff) = match &self.output_prefix {
+            Some(output_prefix) => (
+                format!("{}-variante-results.csv", output_prefix),
+                format!("{}-diff-results.csv", output_prefix),
+            ),
+            _ => (format!("baseline-results.csv"), format!("diff-results.csv")),
+        };
+
+        if let (Some(variante_results), Some(diff_results)) =
+            (&self.results_variante, &self.results_diff)
+        {
+            let mut wtr_var = WriterBuilder::new()
+                .delimiter(b';')
+                .from_path(output_path_var)
+                .map_err(|err| SimulationError::from(err))?;
+
+            let mut wtr_diff = WriterBuilder::new()
+                .delimiter(b';')
+                .from_path(output_path_diff)
+                .map_err(|err| SimulationError::from(err))?;
+
+            let mut headers = self
+                .policy_variante
+                .0
+                .valid_policy
+                .composantes_ordonnees
+                .iter()
+                .map(|composante| composante.name.clone())
+                .collect::<Vec<String>>();
+
+            headers.insert(0, "Index".to_string());
+
+            wtr_var.write_record(&headers);
+            wtr_diff.write_record(&headers);
+
+            headers.remove(0);
+
+            for (index, (results_menage_variante, results_menage_diff)) in
+                variante_results.iter().zip(diff_results.iter()).enumerate()
+            {
+                let mut vec_results_menage_variante = vec![];
+                let mut vec_results_menage_diff = vec![];
+                for name in headers.iter() {
+                    vec_results_menage_variante.push(
+                        results_menage_variante
+                            .get(name)
+                            .ok_or(SimulationError::from(
+                                "Problème de cohérence des composantes lors de l'export"
+                                    .to_string(),
+                            ))?
+                            .to_string(),
+                    );
+                    vec_results_menage_diff.push(
+                        results_menage_diff
+                            .get(name)
+                            .ok_or(SimulationError::from(
+                                "Problème de cohérence des composantes lors de l'export"
+                                    .to_string(),
+                            ))?
+                            .to_string(),
+                    );
+                }
+                vec_results_menage_variante.insert(0, (index + 1).to_string());
+                vec_results_menage_diff.insert(0, (index + 1).to_string());
+                wtr_var.write_record(&vec_results_menage_variante);
+                wtr_diff.write_record(&vec_results_menage_diff);
+            }
+
+            wtr_var.flush().map_err(|err| SimulationError::from(err))?;
+            wtr_diff.flush().map_err(|err| SimulationError::from(err))?;
+            return Ok(());
+        }
+
+        Err(KalkotoError::SimError(SimulationError::from(
+            "Pas possible d'exporter : les résultats n'ont pas encore été calculés".to_string(),
+        )))
     }
 }
