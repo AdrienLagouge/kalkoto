@@ -1,25 +1,106 @@
 use anyhow::Result;
+use clap::Parser;
+use crossterm::style::Stylize;
 use kalkoto_lib::adapters::csv_input_adapter::*;
 use kalkoto_lib::adapters::*;
+use kalkoto_lib::entities::simulator::{
+    EmptyBaselineInput, EmptyMenageInput, EmptyVarianteInput, SimulatorBuilder,
+};
 use toml_input_adapter::TomlInputAdapter;
 
-fn main() -> Result<()> {
-    let csv_input_adapter = CsvInputAdapter::new();
-    let mut csv_content = String::new();
-    let potential_csv_input_adapter =
-        csv_input_adapter.populate_from_path("../test-input/good_input.csv", &mut csv_content)?;
-    let menage_input = MenageInputBuilder::<EmptyList>::new();
-    let menage_input = potential_csv_input_adapter.create_valid_menage_input(menage_input)?;
-    //let (valid_carac_set, valid_liste_menage) = menage_input.get_valid_input_menages();
-    //println!("Headers extraits du fichier : {:?}", valid_carac_set);
-    println!("Menages extraits du fichier CSV: {}", menage_input);
+#[derive(Parser)]
+#[command(author,version,about,long_about = None)]
+struct Args {
+    #[arg(short, long, value_name = "Fichier ménages")]
+    menage_input: String,
 
-    let toml_input_adapter =
-        TomlInputAdapter::new("../test-input/bad_input_typo_composante_function.toml");
-    let policy_input = &toml_input_adapter.create_valid_policy_input()?;
+    #[arg(short, long, value_name = "Fichier politique publique de référence")]
+    baseline_policy_input: String,
+
+    #[arg(short, long, value_name = "Fichier politique publique de variante")]
+    variante_policy_input: Option<String>,
+
+    #[arg(short, long, value_name = "Préfixe pour les fichiers de sortie")]
+    prefix: Option<String>,
+}
+
+fn main() -> Result<()> {
+    let mut sim_builder =
+        SimulatorBuilder::<EmptyMenageInput, EmptyBaselineInput, EmptyVarianteInput>::new();
+
+    let args = Args::parse();
+
+    if let Some(prefix) = args.prefix.as_deref() {
+        sim_builder = sim_builder.add_output_prefix(prefix.to_string())
+    }
+
     println!(
-        "Politique publique extraite du fichier TOML : {}",
-        policy_input
+        "{}",
+        "1) Import des informations du fichier ménages"
+            .yellow()
+            .bold()
+            .underlined()
     );
+
+    let mut csv_input_adapter = CsvInputAdapter::new();
+    let mut csv_content = String::new();
+    csv_input_adapter =
+        csv_input_adapter.populate_from_path(&args.menage_input, &mut csv_content)?;
+
+    let sim_builder = sim_builder.add_menage_input(&csv_input_adapter)?;
+
+    println!("{}", &sim_builder.menage_input.0);
+
+    println!(
+        "{}",
+        "2) Import des informations du fichier de référence de politique publique + simulation"
+            .yellow()
+            .bold()
+            .underlined()
+    );
+
+    let toml_input_adapter_baseline = TomlInputAdapter::new(&args.baseline_policy_input);
+
+    let sim_builder = sim_builder.add_valid_baseline_policy(&toml_input_adapter_baseline)?;
+
+    println!("{}", &sim_builder.policy_baseline.0);
+
+    let sim_builder = sim_builder.simulate_baseline_policy()?;
+
+    println!(
+        "{}",
+        "Export des résultats de la simulation baseline\n"
+            .blue()
+            .bold()
+    );
+
+    sim_builder.export_baseline_results_csv()?;
+
+    if let Some(variante_input) = args.variante_policy_input {
+        println!(
+            "{}",
+            "3) Import des informations du fichier de variante de politique publique + simulation"
+                .yellow()
+                .bold()
+                .underlined()
+        );
+        let toml_input_adapter_variante = TomlInputAdapter::new(&variante_input);
+
+        let sim_builder = sim_builder.add_valid_variante_policy(&toml_input_adapter_variante)?;
+
+        println!("{}", &sim_builder.policy_variante.0);
+
+        let sim_builder = sim_builder.simulate_variante_policy()?;
+
+        println!(
+            "{}",
+            "Export des résultats de la simulation variante\n"
+                .blue()
+                .bold()
+        );
+
+        sim_builder.export_variante_results_csv()?;
+    }
+
     Ok(())
 }
