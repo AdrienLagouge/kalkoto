@@ -1,7 +1,6 @@
 use crate::entities::menage::*;
 use crate::entities::policy::*;
 use crate::prelude::*;
-
 use itertools::Itertools;
 use std::fmt::Display;
 use std::fs::write;
@@ -10,13 +9,14 @@ use std::{
     error::Error,
     fmt::{Debug},
 };
+use crossterm::style::Stylize;
 
 pub mod csv_input_adapter;
 pub mod toml_input_adapter;
 
 #[derive(thiserror::Error)]
 pub enum MenageListAdapterError {
-    #[error("Erreur à la lecture du stream d'input")]
+    #[error("Erreur à la lecture du stream d'input ménages")]
     IO(#[from] std::io::Error),
 
     #[error("Erreur à la validation de la liste des cas-types pour les ménages {} et {}.\nCause : {}.\nConseil : {}",.fault_index,.fault_index+1,.cause,.conseil)]
@@ -37,10 +37,10 @@ impl Debug for MenageListAdapterError {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq,Default)]
 pub struct MenageInput {
-    set_caracteristiques_valide: HashSet<String>,
-    liste_menage_valide: Vec<Menage>,
+   pub set_caracteristiques_valide: HashSet<String>,
+   pub liste_menage_valide: Vec<Menage>,
 }
 
 impl MenageInput {
@@ -51,9 +51,9 @@ impl MenageInput {
 
 impl Display for MenageInput {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f,"Input Ménages correctement initialisé !\n")?;
-        writeln!(f, "Liste des caractéristiques trouvées dans l'input :\n{:?}", self.set_caracteristiques_valide)?;
-        writeln!(f, "Exemple du premier ménage trouvé dans l'input :\n{:?}", self.liste_menage_valide[0])
+        writeln!(f,"{}","Input Ménages correctement initialisé !\n".green().bold())?;
+        writeln!(f, "Liste des caractéristiques trouvées dans l'input Ménages :\n{:?}\n", self.set_caracteristiques_valide)?;
+        writeln!(f, "Exemple du premier ménage trouvé dans l'input Ménages :\n{:?}", self.liste_menage_valide[0])
     }
 }
 
@@ -172,17 +172,18 @@ impl From<String> for PolicyAdapterError {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct PolicyInput {
-    valid_policy: Policy
+    pub valid_policy: Policy
 }
 
 impl Display for PolicyInput {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f,"Input Policy correctement initialisé !\n")?;
-        writeln!(f, "Politique publique à simuler  trouvée dans l'input :\n{:?}", self.valid_policy.intitule_long)?;
+        writeln!(f,"{}","Input Policy correctement initialisé !\n".green().bold())?;
+        writeln!(f, "Politique publique à simuler  trouvée dans l'input Policy :\n{:?}\n", self.valid_policy.intitule_long)?;
         writeln!(f, "Liste ordonnée des composantes de cette politique publique :")?;
         let composantes_names  = self.valid_policy.composantes_ordonnees.iter().map(|s| format!("- {}",s.name)).collect::<Vec<String>>().join("\n");
-        write!(f,"{}",composantes_names)
+        writeln!(f,"{}",composantes_names)
     }
 }
 

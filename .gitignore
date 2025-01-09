@@ -1,6 +1,8 @@
 /target
 /test-input
+/test-output
 Secrets*.toml
 static/
 dist/
 node_modules/
+.vscode
