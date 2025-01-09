@@ -34,6 +34,14 @@ fn main() -> Result<()> {
         sim_builder = sim_builder.add_output_prefix(prefix.to_string())
     }
 
+    println!(
+        "{}",
+        "1) Import des informations du fichier ménages"
+            .yellow()
+            .bold()
+            .underlined()
+    );
+
     let mut csv_input_adapter = CsvInputAdapter::new();
     let mut csv_content = String::new();
     csv_input_adapter =
@@ -42,6 +50,14 @@ fn main() -> Result<()> {
     let sim_builder = sim_builder.add_menage_input(&csv_input_adapter)?;
 
     println!("{}", &sim_builder.menage_input.0);
+
+    println!(
+        "{}",
+        "2) Import des informations du fichier de référence de politique publique + simulation"
+            .yellow()
+            .bold()
+            .underlined()
+    );
 
     let toml_input_adapter_baseline = TomlInputAdapter::new(&args.baseline_policy_input);
 
@@ -56,32 +72,35 @@ fn main() -> Result<()> {
         "Export des résultats de la simulation baseline\n"
             .blue()
             .bold()
-            .underlined()
     );
 
     sim_builder.export_baseline_results_csv()?;
 
-    // let toml_input_adapter_variante =
-    //     TomlInputAdapter::new("../test-input/good_input_variante.toml");
+    if let Some(variante_input) = args.variante_policy_input {
+        println!(
+            "{}",
+            "3) Import des informations du fichier de variante de politique publique + simulation"
+                .yellow()
+                .bold()
+                .underlined()
+        );
+        let toml_input_adapter_variante = TomlInputAdapter::new(&variante_input);
 
-    // sim_builder = sim_builder.add_valid_variante_policy(&toml_input_adapter_variante)?;
+        let sim_builder = sim_builder.add_valid_variante_policy(&toml_input_adapter_variante)?;
 
-    // println!(
-    //     "Variante extraite du fichier TOML : {}\n",
-    //     &sim_builder.policy_variante.0
-    // );
+        println!("{}", &sim_builder.policy_variante.0);
 
-    // sim_builder = sim_builder.simulate_variante_policy()?;
-    // println!(
-    //     "->>>> Debug results variante : {:?}\n",
-    //     &sim_builder.results_variante
-    // );
-    // println!(
-    //     "->>>> Debug results diff : {:?}\n",
-    //     &sim_builder.results_diff
-    // );
+        let sim_builder = sim_builder.simulate_variante_policy()?;
 
-    // sim_builder.export_variante_results_csv()?;
+        println!(
+            "{}",
+            "Export des résultats de la simulation variante\n"
+                .blue()
+                .bold()
+        );
+
+        sim_builder.export_variante_results_csv()?;
+    }
 
     Ok(())
 }

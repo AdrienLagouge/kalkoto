@@ -16,7 +16,7 @@ pub mod toml_input_adapter;
 
 #[derive(thiserror::Error)]
 pub enum MenageListAdapterError {
-    #[error("Erreur à la lecture du stream d'input")]
+    #[error("Erreur à la lecture du stream d'input ménages")]
     IO(#[from] std::io::Error),
 
     #[error("Erreur à la validation de la liste des cas-types pour les ménages {} et {}.\nCause : {}.\nConseil : {}",.fault_index,.fault_index+1,.cause,.conseil)]
@@ -51,7 +51,7 @@ impl MenageInput {
 
 impl Display for MenageInput {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f,"{}","Input Ménages correctement initialisé !\n".green().bold().underlined())?;
+        writeln!(f,"{}","Input Ménages correctement initialisé !\n".green().bold())?;
         writeln!(f, "Liste des caractéristiques trouvées dans l'input Ménages :\n{:?}\n", self.set_caracteristiques_valide)?;
         writeln!(f, "Exemple du premier ménage trouvé dans l'input Ménages :\n{:?}", self.liste_menage_valide[0])
     }
@@ -179,7 +179,7 @@ pub struct PolicyInput {
 
 impl Display for PolicyInput {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f,"{}","Input Policy correctement initialisé !\n".green().bold().underlined())?;
+        writeln!(f,"{}","Input Policy correctement initialisé !\n".green().bold())?;
         writeln!(f, "Politique publique à simuler  trouvée dans l'input Policy :\n{:?}\n", self.valid_policy.intitule_long)?;
         writeln!(f, "Liste ordonnée des composantes de cette politique publique :")?;
         let composantes_names  = self.valid_policy.composantes_ordonnees.iter().map(|s| format!("- {}",s.name)).collect::<Vec<String>>().join("\n");
