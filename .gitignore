@@ -1,5 +1,7 @@
 /target
 /test-input
+/test-output
+.vscode
 Secrets*.toml
 static/
 dist/
