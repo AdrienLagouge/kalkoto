@@ -61,11 +61,11 @@ fn main() -> Result<()> {
 
     let toml_input_adapter_baseline = TomlInputAdapter::new(&args.baseline_policy_input);
 
-    let sim_builder = sim_builder.add_valid_baseline_policy(&toml_input_adapter_baseline)?;
+    let mut sim_builder = sim_builder.add_valid_baseline_policy(&toml_input_adapter_baseline)?;
 
     println!("{}", &sim_builder.policy_baseline.0);
 
-    let sim_builder = sim_builder.simulate_baseline_policy()?;
+    sim_builder.simulate_baseline_policy()?;
 
     println!(
         "{}",
@@ -86,11 +86,12 @@ fn main() -> Result<()> {
         );
         let toml_input_adapter_variante = TomlInputAdapter::new(&variante_input);
 
-        let sim_builder = sim_builder.add_valid_variante_policy(&toml_input_adapter_variante)?;
+        let mut sim_builder =
+            sim_builder.add_valid_variante_policy(&toml_input_adapter_variante)?;
 
         println!("{}", &sim_builder.policy_variante.0);
 
-        let sim_builder = sim_builder.simulate_variante_policy()?;
+        sim_builder.simulate_variante_policy()?;
 
         println!(
             "{}",

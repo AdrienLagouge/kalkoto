@@ -2,6 +2,7 @@ use crate::entities::menage::*;
 use crate::entities::policy::*;
 use crate::prelude::*;
 use itertools::Itertools;
+use std::boxed;
 use std::fmt::Display;
 use std::fs::write;
 use std::{
@@ -98,8 +99,8 @@ impl<U> MenageInputBuilder<U> {
 }
 
 impl MenageInputBuilder<Unvalid> {
-    pub fn validate_liste_menage(self) -> KalkotoResult<MenageInputBuilder<Valid>> {
-        let unvalidated_liste_menage = &self.liste_menage.0;
+    pub fn has_valid_liste_menage(&self) -> KalkotoResult<bool> { 
+    let unvalidated_liste_menage = &self.liste_menage.0;
 
         if unvalidated_liste_menage.is_empty() {
             return Err(From::from(MenageListAdapterError::ValidationError {
@@ -113,7 +114,7 @@ impl MenageInputBuilder<Unvalid> {
             .iter()
             .tuple_windows::<(&Menage, &Menage)>()
             .filter(|pair| !(pair.0.compare_type_carac(pair.1).0))
-            .map(|pair| pair.0.clone())
+            .map(|pair| pair.0.to_owned())
             .take(1)
             .collect();
 
@@ -126,8 +127,13 @@ impl MenageInputBuilder<Unvalid> {
             }));
         };
 
-        let validated_liste_menage = unvalidated_liste_menage.clone();
-        let validated_set_caracteristiques: HashSet<String> = validated_liste_menage[0]
+     Ok(true)
+    }
+
+    pub fn validate_liste_menage(self) -> KalkotoResult<MenageInputBuilder<Valid>> {
+    let valid_liste_menage = self.has_valid_liste_menage()?;
+
+        let validated_set_caracteristiques: HashSet<String> = self.liste_menage.0.first().unwrap()
             .caracteristiques
             .keys()
             .cloned()
@@ -135,7 +141,7 @@ impl MenageInputBuilder<Unvalid> {
 
         Ok(MenageInputBuilder {
             set_caracteristiques: Some(validated_set_caracteristiques),
-            liste_menage: Valid(validated_liste_menage),
+            liste_menage: Valid(self.liste_menage.0.clone()),
         })
     }
 }
@@ -286,7 +292,7 @@ mod tests {
 
         let wanted = true;
         let mut result = MenageInputBuilder::<EmptyList>::new()
-            .from_unvalidated_liste_menage(invalid_menage_list.clone())
+            .from_unvalidated_liste_menage(invalid_menage_list)
             .validate_liste_menage()
             .is_err();
         assert_eq!(wanted, result);

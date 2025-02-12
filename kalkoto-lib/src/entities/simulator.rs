@@ -4,6 +4,7 @@ use crate::prelude::*;
 use csv::WriterBuilder;
 use std::collections::{HashMap, HashSet};
 use std::fmt::{write, Write};
+use std::hash::Hash;
 use std::vec;
 
 #[derive(thiserror::Error, Debug)]
@@ -118,35 +119,30 @@ impl SimulatorBuilder<ValidMenageInput, EmptyBaselineInput, EmptyVarianteInput> 
 }
 
 impl<E> SimulatorBuilder<ValidMenageInput, ValidBaselineInput, E> {
-    pub fn simulate_baseline_policy(mut self) -> KalkotoResult<Self> {
-        let results: KalkotoResult<Vec<HashMap<String, f64>>> = self
+    pub fn simulate_baseline_policy(&mut self) -> KalkotoResult<()> {
+        let results = self
             .menage_input
             .0
             .liste_menage_valide
             .iter()
             .map(|menage| self.policy_baseline.0.valid_policy.simulate_menage(menage))
-            .collect();
+            .collect::<KalkotoResult<Vec<HashMap<String, f64>>>>()?;
 
-        match results {
-            Ok(results) => Ok(Self {
-                results_baseline: Some(results.clone()),
-                ..self
-            }),
-            Err(e) => Err(e),
-        }
+        self.results_baseline = Some(results);
+        Ok(())
     }
 
     pub fn export_baseline_results_csv(&self) -> KalkotoResult<()> {
         let output_path = match &self.output_prefix {
             Some(output_prefix) => format!("{}-baseline-results.csv", output_prefix),
-            _ => format!("baseline-results.csv"),
+            _ => String::from("baseline-results.csv"),
         };
 
         if let Some(baseline_results) = &self.results_baseline {
             let mut wtr = WriterBuilder::new()
                 .delimiter(b';')
                 .from_path(output_path)
-                .map_err(|err| SimulationError::from(err))?;
+                .map_err(SimulationError::from)?;
 
             let mut headers = self
                 .policy_baseline
@@ -180,7 +176,7 @@ impl<E> SimulatorBuilder<ValidMenageInput, ValidBaselineInput, E> {
                 wtr.write_record(&vec_results_menage);
             }
 
-            wtr.flush().map_err(|err| SimulationError::from(err))?;
+            wtr.flush().map_err(SimulationError::from)?;
             return Ok(());
         }
 
@@ -224,19 +220,14 @@ impl SimulatorBuilder<ValidMenageInput, ValidBaselineInput, EmptyVarianteInput> 
 }
 
 impl SimulatorBuilder<ValidMenageInput, ValidBaselineInput, ValidVarianteInput> {
-    pub fn simulate_variante_policy(mut self) -> KalkotoResult<Self> {
-        let results: KalkotoResult<Vec<HashMap<String, f64>>> = self
+    pub fn simulate_variante_policy(&mut self) -> KalkotoResult<()> {
+        let results = self
             .menage_input
             .0
             .liste_menage_valide
             .iter()
             .map(|menage| self.policy_variante.0.valid_policy.simulate_menage(menage))
-            .collect();
-
-        let results = match results {
-            Ok(results) => results,
-            Err(e) => return Err(e),
-        };
+            .collect::<KalkotoResult<Vec<HashMap<String, f64>>>>()?;
 
         let mut diff_results = vec![];
 
@@ -261,11 +252,10 @@ impl SimulatorBuilder<ValidMenageInput, ValidBaselineInput, ValidVarianteInput> 
             diff_results.push(diff_map);
         }
 
-        Ok(Self {
-            results_variante: Some(results),
-            results_diff: Some(diff_results),
-            ..self
-        })
+        self.results_variante = Some(results);
+        self.results_diff = Some(diff_results);
+
+        Ok(())
     }
 
     pub fn export_variante_results_csv(&self) -> KalkotoResult<()> {
@@ -274,7 +264,10 @@ impl SimulatorBuilder<ValidMenageInput, ValidBaselineInput, ValidVarianteInput> 
                 format!("{}-variante-results.csv", output_prefix),
                 format!("{}-diff-results.csv", output_prefix),
             ),
-            _ => (format!("baseline-results.csv"), format!("diff-results.csv")),
+            _ => (
+                String::from("baseline-results.csv"),
+                String::from("diff-results.csv"),
+            ),
         };
 
         if let (Some(variante_results), Some(diff_results)) =
@@ -283,12 +276,12 @@ impl SimulatorBuilder<ValidMenageInput, ValidBaselineInput, ValidVarianteInput> 
             let mut wtr_var = WriterBuilder::new()
                 .delimiter(b';')
                 .from_path(output_path_var)
-                .map_err(|err| SimulationError::from(err))?;
+                .map_err(SimulationError::from)?;
 
             let mut wtr_diff = WriterBuilder::new()
                 .delimiter(b';')
                 .from_path(output_path_diff)
-                .map_err(|err| SimulationError::from(err))?;
+                .map_err(SimulationError::from)?;
 
             let mut headers = self
                 .policy_variante
@@ -337,8 +330,8 @@ impl SimulatorBuilder<ValidMenageInput, ValidBaselineInput, ValidVarianteInput> 
                 wtr_diff.write_record(&vec_results_menage_diff);
             }
 
-            wtr_var.flush().map_err(|err| SimulationError::from(err))?;
-            wtr_diff.flush().map_err(|err| SimulationError::from(err))?;
+            wtr_var.flush().map_err(SimulationError::from)?;
+            wtr_diff.flush().map_err(SimulationError::from)?;
             return Ok(());
         }
 
