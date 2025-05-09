@@ -118,12 +118,12 @@ impl CsvInputAdapter {
 
 impl MenageListAdapter for CsvInputAdapter {
     fn create_valid_menage_input(
-        &self,
+        self,
         empty_menage_input: super::MenageInputBuilder<super::EmptyList>,
     ) -> KalkotoResult<super::MenageInput> {
-        match (&self.set_caracteristiques, &self.liste_menages) {
+        match (self.set_caracteristiques, self.liste_menages) {
             (Some(set_caracteristiques), Some(liste_menages)) => empty_menage_input
-                .from_unvalidated_liste_menage(liste_menages.clone())
+                .from_unvalidated_liste_menage(liste_menages)
                 .validate_liste_menage()?
                 .build_valide_menage_input(),
             (_, _) => Err(From::from(MenageListAdapterError::ValidationError {

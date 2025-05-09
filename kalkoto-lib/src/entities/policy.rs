@@ -30,20 +30,20 @@ impl Composante {
     pub fn simulate_menage(
         &self,
         menage: &Menage,
-        mut variables_dict: HashMap<String, f64>,
+        variables_dict: &mut HashMap<String, f64>,
         parameters_dict: &HashMap<String, f64>,
-    ) -> KalkotoResult<HashMap<String, f64>> {
+    ) -> KalkotoResult<()> {
         pyo3::prepare_freethreaded_python();
         let mut output: f64;
         output = Python::with_gil(|py| -> PyResult<f64> {
             let composantemodule = PyModule::from_code(
                 py,
-                CString::new(self.function.0.clone())?.as_c_str(),
+                CString::new(self.function.0.to_owned())?.as_c_str(),
                 c_str!("composantemodule.py"),
                 c_str!("composantemodule"),
             )?;
 
-            let variables_dict_py = &variables_dict.clone().into_py_dict(py)?;
+            let variables_dict_py = variables_dict.to_owned().into_py_dict(py)?;
             let params_dict_py = parameters_dict.into_py_dict(py)?;
             let menage_carac_dict_py = menage.caracteristiques.clone().into_py_dict(py)?;
 
@@ -58,7 +58,7 @@ impl Composante {
 
         variables_dict.insert(self.name.to_owned(), output);
 
-        Ok(variables_dict)
+        Ok(())
     }
 }
 
@@ -77,10 +77,9 @@ impl Policy {
         let mut variables_dict = HashMap::<String, f64>::new();
 
         for composante in self.composantes_ordonnees.iter() {
-            variables_dict =
-                composante.simulate_menage(menage, variables_dict, &self.parameters_values)?;
+            composante.simulate_menage(menage, &mut variables_dict, &self.parameters_values)?;
         }
 
-        Ok(variables_dict.clone())
+        Ok(variables_dict.to_owned())
     }
 }

@@ -47,7 +47,7 @@ fn main() -> Result<()> {
     csv_input_adapter =
         csv_input_adapter.populate_from_path(&args.menage_input, &mut csv_content)?;
 
-    let sim_builder = sim_builder.add_menage_input(&csv_input_adapter)?;
+    let sim_builder = sim_builder.add_menage_input(csv_input_adapter)?;
 
     println!("{}", &sim_builder.menage_input.0);
 

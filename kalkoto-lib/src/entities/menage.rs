@@ -59,7 +59,7 @@ impl Menage {
                 }
                 None => {
                     validator = false;
-                    fault_key = nom_carac.clone();
+                    fault_key = nom_carac.to_owned();
                 }
             }
             if !validator {

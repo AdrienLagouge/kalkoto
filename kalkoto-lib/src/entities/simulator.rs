@@ -2,6 +2,7 @@ use crate::adapters::*;
 use crate::entities::menage::Menage;
 use crate::prelude::*;
 use csv::WriterBuilder;
+use rayon::prelude::*;
 use std::collections::{HashMap, HashSet};
 use std::fmt::{write, Write};
 use std::hash::Hash;
@@ -67,7 +68,7 @@ impl SimulatorBuilder<EmptyMenageInput, EmptyBaselineInput, EmptyVarianteInput> 
 
     pub fn add_menage_input<M: MenageListAdapter>(
         self,
-        menage_input_adapter: &M,
+        menage_input_adapter: M,
     ) -> KalkotoResult<SimulatorBuilder<ValidMenageInput, EmptyBaselineInput, EmptyVarianteInput>>
     {
         let start_menage_list = MenageInputBuilder::<EmptyList>::new();
@@ -124,7 +125,7 @@ impl<E> SimulatorBuilder<ValidMenageInput, ValidBaselineInput, E> {
             .menage_input
             .0
             .liste_menage_valide
-            .iter()
+            .par_iter()
             .map(|menage| self.policy_baseline.0.valid_policy.simulate_menage(menage))
             .collect::<KalkotoResult<Vec<HashMap<String, f64>>>>()?;
 
@@ -225,7 +226,7 @@ impl SimulatorBuilder<ValidMenageInput, ValidBaselineInput, ValidVarianteInput> 
             .menage_input
             .0
             .liste_menage_valide
-            .iter()
+            .par_iter()
             .map(|menage| self.policy_variante.0.valid_policy.simulate_menage(menage))
             .collect::<KalkotoResult<Vec<HashMap<String, f64>>>>()?;
 
@@ -233,7 +234,7 @@ impl SimulatorBuilder<ValidMenageInput, ValidBaselineInput, ValidVarianteInput> 
 
         for (baseline_result, variante_result) in self
             .results_baseline
-            .clone()
+            .take()
             .ok_or(SimulationError::from(
                 "Baseline pas encore calculée !".to_string(),
             ))?
@@ -247,7 +248,7 @@ impl SimulatorBuilder<ValidMenageInput, ValidBaselineInput, ValidVarianteInput> 
                     "Variante non encore calculée".to_string(),
                 ))?;
                 let diff = var_value - baseline_value;
-                diff_map.insert(name.clone(), diff);
+                diff_map.insert(name.to_owned(), diff);
             }
             diff_results.push(diff_map);
         }

@@ -62,7 +62,7 @@ impl Display for MenageInput {
 // les caractéristiques ont été vérifiées
 pub trait MenageListAdapter {
     fn create_valid_menage_input(
-        &self,
+        self,
         empty_menage_input: MenageInputBuilder<EmptyList>,
     ) -> KalkotoResult<MenageInput>;
 }
