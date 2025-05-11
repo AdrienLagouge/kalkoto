@@ -122,14 +122,13 @@ impl SimulatorBuilder<ValidMenageInput, EmptyBaselineInput, EmptyVarianteInput> 
 impl<E> SimulatorBuilder<ValidMenageInput, ValidBaselineInput, E> {
     pub fn simulate_baseline_policy(&mut self) -> KalkotoResult<()> {
         let results = self
-            .menage_input
+            .policy_baseline
             .0
-            .liste_menage_valide
-            .par_iter()
-            .map(|menage| self.policy_baseline.0.valid_policy.simulate_menage(menage))
-            .collect::<KalkotoResult<Vec<HashMap<String, f64>>>>()?;
+            .valid_policy
+            .simulate_all_menages(&self.menage_input.0.liste_menage_valide)?;
 
         self.results_baseline = Some(results);
+
         Ok(())
     }
 
@@ -166,10 +165,12 @@ impl<E> SimulatorBuilder<ValidMenageInput, ValidBaselineInput, E> {
                     vec_results_menage.push(
                         results_menage
                             .get(name)
-                            .ok_or(SimulationError::from(
-                                "Problème de cohérence des composantes lors de l'export"
-                                    .to_string(),
-                            ))?
+                            .ok_or_else(|| {
+                                SimulationError::from(
+                                    "Problème de cohérence des composantes lors de l'export"
+                                        .to_string(),
+                                )
+                            })?
                             .to_string(),
                     );
                 }
@@ -223,12 +224,10 @@ impl SimulatorBuilder<ValidMenageInput, ValidBaselineInput, EmptyVarianteInput> 
 impl SimulatorBuilder<ValidMenageInput, ValidBaselineInput, ValidVarianteInput> {
     pub fn simulate_variante_policy(&mut self) -> KalkotoResult<()> {
         let results = self
-            .menage_input
+            .policy_variante
             .0
-            .liste_menage_valide
-            .par_iter()
-            .map(|menage| self.policy_variante.0.valid_policy.simulate_menage(menage))
-            .collect::<KalkotoResult<Vec<HashMap<String, f64>>>>()?;
+            .valid_policy
+            .simulate_all_menages(&self.menage_input.0.liste_menage_valide)?;
 
         let mut diff_results = vec![];
 

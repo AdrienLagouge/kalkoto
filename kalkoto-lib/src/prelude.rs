@@ -1,5 +1,4 @@
 //! Crate prelude
-
 pub use crate::errors::KalkotoError;
 
 pub type KalkotoResult<T> = core::result::Result<T, KalkotoError>;

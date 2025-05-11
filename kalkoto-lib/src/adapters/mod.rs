@@ -67,7 +67,7 @@ pub trait MenageListAdapter {
     ) -> KalkotoResult<MenageInput>;
 }
 
-//Market trait pour définir les différents états possibles d'une liste ménages
+//Marker trait pour définir les différents états possibles d'une liste ménages
 pub trait MenageList {}
 
 #[derive(Default, Debug, Clone)]
@@ -125,8 +125,7 @@ impl MenageInputBuilder<Unvalid> {
             .collect();
 
         if let Some(first_faulty_menage) = first_faulty_menage.pop() {
-            let carac_cause = format!("Les types ou les noms des caractéristiques de ces deux ménages ne correspondent pas. Problème à la caractéristique {}",first_faulty_menage.2);
-
+            let carac_cause = format!("Les types ou les noms des caractéristiques de ces deux ménages ne correspondent pas. Problème à la caractéristique {0}",first_faulty_menage.2.clone());
             return Err(crate::errors::KalkotoError::ListMenageError(MenageListAdapterError::ValidationError {
                 fault_index: first_faulty_menage.1,
                 cause:  carac_cause,

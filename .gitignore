@@ -6,3 +6,5 @@ static/
 dist/
 node_modules/
 .vscode
+/kalkoto-test
+

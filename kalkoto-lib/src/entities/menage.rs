@@ -64,6 +64,7 @@ impl Menage {
             }
             if !validator {
                 fault_index = self.index;
+                fault_key = nom_carac.to_owned();
                 return (validator, fault_index, fault_key);
             }
         }
@@ -113,7 +114,7 @@ mod tests {
 
     #[test]
     fn unmatched_types_compar_carac() {
-        let wanted = (false, 1, "".to_string());
+        let wanted = (false, 1, "Revenu".to_string());
 
         let mut first_menage = Menage::new(1);
         first_menage
