@@ -1,6 +1,7 @@
 use crate::adapters::*;
 use crate::entities::menage::Menage;
 use crate::prelude::*;
+use crate::{KalkotoError, KalkotoResult};
 use csv::WriterBuilder;
 use rayon::prelude::*;
 use std::collections::{HashMap, HashSet};
@@ -94,15 +95,14 @@ impl SimulatorBuilder<ValidMenageInput, EmptyBaselineInput, EmptyVarianteInput> 
     {
         let baseline_policy_input = baseline_policy_adapter.create_valid_policy_input()?;
 
-        let intersect_caracteristiques = baseline_policy_input
+        let diff_caracteristiques: HashSet<_> = baseline_policy_input
             .valid_policy
             .caracteristiques_menages
-            .intersection(&self.menage_input.0.set_caracteristiques_valide)
-            .cloned()
-            .collect::<HashSet<String>>();
+            .difference(&self.menage_input.0.set_caracteristiques_valide)
+            .clone()
+            .collect();
 
-        let is_valid = intersect_caracteristiques
-            == baseline_policy_input.valid_policy.caracteristiques_menages;
+        let is_valid = diff_caracteristiques.is_empty();
 
         match is_valid {
             true => Ok(SimulatorBuilder {
@@ -114,7 +114,10 @@ impl SimulatorBuilder<ValidMenageInput, EmptyBaselineInput, EmptyVarianteInput> 
                 results_diff: self.results_diff,
                 output_prefix: self.output_prefix,
             }),
-            _ => Err(SimulationError::from("Les caractéristiques dont dépend la politique baseline sont plus larges que celles présentes dans le fichier ménages".to_string()).into()),
+            _ => {
+                let error_msg = format!("Les caractéristiques dont dépend la politique baseline sont plus larges que celles présentes dans le fichier ménages.\nMauvaises caractéristiques : {:?}",diff_caracteristiques);
+                Err(KalkotoError::SimError(SimulationError::from(error_msg)))
+            }
         }
     }
 }
@@ -167,8 +170,7 @@ impl<E> SimulatorBuilder<ValidMenageInput, ValidBaselineInput, E> {
                             .get(name)
                             .ok_or_else(|| {
                                 SimulationError::from(
-                                    "Problème de cohérence des composantes lors de l'export"
-                                        .to_string(),
+                                    format!("Problème de cohérence des composantes lors de l'export. Erreur : {}",name)
                                 )
                             })?
                             .to_string(),

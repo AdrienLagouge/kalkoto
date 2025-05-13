@@ -48,13 +48,6 @@ impl Composante {
 
             let params_dict_py = parameters_dict.into_py_dict(py)?;
 
-            // let variables_dict_py: Result<Vec<Bound<'_, PyDict>>, PyErr> = vec_variables_dict
-            //     .iter()
-            //     .map(|dict| dict.into_py_dict(py))
-            //     .collect();
-            //
-            // let variables_dict_py = variables_dict_py?;
-            //
             menages
                 .iter()
                 .enumerate()
@@ -65,10 +58,20 @@ impl Composante {
 
                     let args = (variables_dict_py, &params_dict_py, menage_carac_dict_py);
 
-                    let result = rustfunc.call(args, None)?;
-                    let output_py = result.extract()?;
+                    let result = rustfunc.call(args, None);
 
-                    vec_variables_dict[index].insert(self.name.to_owned(), output_py);
+                    match result {
+                        Ok(result) => {
+                            let output_py = result.extract()?;
+                            vec_variables_dict[index].insert(self.name.to_owned(), output_py);
+                        }
+                        Err(e) => println!(
+                            "Erreur lors du calcul de la composante {} ; {}",
+                            self.name,
+                            e.to_string()
+                        ),
+                    };
+
                     Ok(())
                 });
             Ok(())
