@@ -2,15 +2,15 @@ use crate::entities::menage::*;
 use crate::entities::policy::*;
 use crate::prelude::*;
 use itertools::Itertools;
-use std::boxed;
-use std::fmt::Display;
-use std::fs::write;
 use std::{
     collections::HashSet,
     error::Error,
-    fmt::{Debug},
+    fmt::{Debug,Display},
+    fs::write,
+    boxed,
+    rc::Rc,
 };
-use crossterm::style::Stylize;
+use crossterm::style::*;
 
 pub mod csv_input_adapter;
 pub mod toml_input_adapter;
@@ -40,8 +40,8 @@ impl Debug for MenageListAdapterError {
 
 #[derive(Debug, Clone, PartialEq,Default)]
 pub struct MenageInput {
-   pub set_caracteristiques_valide: HashSet<String>,
-   pub liste_menage_valide: Vec<Menage>,
+   pub set_caracteristiques_valide: Rc<HashSet<String>>,
+   pub liste_menage_valide: Rc<Vec<Menage>>,
 }
 
 impl MenageInput {
@@ -58,14 +58,7 @@ impl Display for MenageInput {
     }
 }
 
-// Trait commun à tous les adapteurs de création d'une liste de ménages dont toutes
-// les caractéristiques ont été vérifiées
-pub trait MenageListAdapter {
-    fn create_valid_menage_input(
-        self,
-        empty_menage_input: MenageInputBuilder<EmptyList>,
-    ) -> KalkotoResult<MenageInput>;
-}
+
 
 //Marker trait pour définir les différents états possibles d'une liste ménages
 pub trait MenageList {}
@@ -125,7 +118,7 @@ impl MenageInputBuilder<Unvalid> {
             .collect();
 
         if let Some(first_faulty_menage) = first_faulty_menage.pop() {
-            let carac_cause = format!("Les types ou les noms des caractéristiques de ces deux ménages ne correspondent pas. Problème à la caractéristique {0}",first_faulty_menage.2.clone());
+            let carac_cause = format!("Les types ou les noms des caractéristiques de ces deux ménages ne correspondent pas. Problème à la caractéristique {0}",first_faulty_menage.2);
             return Err(crate::errors::KalkotoError::ListMenageError(MenageListAdapterError::ValidationError {
                 fault_index: first_faulty_menage.1,
                 cause:  carac_cause,
@@ -164,6 +157,15 @@ impl MenageInputBuilder<Valid> {
         Err(From::from(MenageListAdapterError::ValidationError { fault_index: -1 
             , cause: "La liste des caractéristiques des ménages ne peut pas être établie à partir de la liste des ménages".to_string(), conseil: "Vérifier la liste des étapes pour construire un MenageInput".to_string()}))
     }}
+}
+
+// Trait commun à tous les adapteurs de création d'une liste de ménages dont toutes
+// les caractéristiques ont été vérifiées
+pub trait MenageListAdapter {
+    fn create_valid_menage_input(
+        self,
+        empty_menage_input: MenageInputBuilder<EmptyList>,
+    ) -> KalkotoResult<MenageInput>;
 }
 
 #[derive(thiserror::Error,Debug)]

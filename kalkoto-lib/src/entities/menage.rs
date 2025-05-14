@@ -2,6 +2,7 @@ use pyo3::prelude::*;
 use std::collections::HashMap;
 use std::fmt;
 use std::mem;
+use std::rc::Rc;
 
 #[derive(IntoPyObject, Clone, Debug, PartialEq)]
 pub enum Caracteristique {
@@ -20,14 +21,17 @@ impl fmt::Display for Caracteristique {
     }
 }
 
-impl From<String> for Caracteristique {
-    fn from(string: String) -> Caracteristique {
-        if let Ok(entier) = string.parse::<i32>() {
+impl<T> From<T> for Caracteristique
+where
+    T: AsRef<str>,
+{
+    fn from(string: T) -> Caracteristique {
+        if let Ok(entier) = string.as_ref().parse::<i32>() {
             Caracteristique::Entier(entier)
-        } else if let Ok(numeric) = string.parse::<f64>() {
+        } else if let Ok(numeric) = string.as_ref().parse::<f64>() {
             Caracteristique::Numeric(numeric)
         } else {
-            Caracteristique::Textuel(string)
+            Caracteristique::Textuel(string.as_ref().into())
         }
     }
 }
@@ -35,7 +39,7 @@ impl From<String> for Caracteristique {
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Menage {
     pub index: i32,
-    pub caracteristiques: HashMap<String, Caracteristique>,
+    pub caracteristiques: HashMap<Rc<String>, Caracteristique>,
 }
 
 impl Menage {
@@ -46,7 +50,7 @@ impl Menage {
         }
     }
 
-    pub fn compare_type_carac(&self, other_menage: &Self) -> (bool, i32, String) {
+    pub fn compare_type_carac(self, other_menage: &Self) -> (bool, i32, String) {
         let mut validator = true;
         let mut fault_index = -1;
         let mut fault_key = "".to_string();
@@ -59,16 +63,18 @@ impl Menage {
                 }
                 None => {
                     validator = false;
-                    fault_key = nom_carac.to_owned();
+                    fault_key = *nom_carac.clone();
+                    fault_index = self.index;
+                    return (validator, fault_index, fault_key);
                 }
             }
             if !validator {
+                fault_key = nom_carac;
                 fault_index = self.index;
-                fault_key = nom_carac.to_owned();
                 return (validator, fault_index, fault_key);
-            }
+            };
         }
-        (validator, fault_index, fault_key)
+        (true, fault_index, fault_key)
     }
 }
 
@@ -88,7 +94,7 @@ mod tests {
 
     #[test]
     fn ok_compar_carac() {
-        let wanted = (true, -1, "".to_string());
+        let wanted = (true, -1, "");
 
         let mut first_menage = Menage::new(1);
         first_menage
@@ -114,7 +120,7 @@ mod tests {
 
     #[test]
     fn unmatched_types_compar_carac() {
-        let wanted = (false, 1, "Revenu".to_string());
+        let wanted = (false, 1, "Revenu");
 
         let mut first_menage = Menage::new(1);
         first_menage
@@ -140,7 +146,7 @@ mod tests {
 
     #[test]
     fn unmatched_nom_compar_carac() {
-        let wanted = (false, 1, "TypeLogement".to_string());
+        let wanted = (false, 1, "TypeLogement");
 
         let mut first_menage = Menage::new(1);
         first_menage

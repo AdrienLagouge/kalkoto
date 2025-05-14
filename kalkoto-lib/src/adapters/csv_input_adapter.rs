@@ -1,12 +1,14 @@
 use crate::adapters::{MenageListAdapter, MenageListAdapterError};
 use crate::entities::menage::{Caracteristique, Menage};
+use crossterm::style::Color;
 use csv::{Reader, ReaderBuilder, StringRecord};
-use std::collections::{HashMap, HashSet};
-use std::error::Error;
 use std::{
+    collections::{HashMap, HashSet},
+    error::Error,
     fs::{write, File},
     io::{self, Read},
     path::Path,
+    rc::Rc,
 };
 
 use super::{KalkotoError, KalkotoResult};
@@ -23,28 +25,26 @@ impl From<csv::Error> for MenageListAdapterError {
 
 #[derive(Debug, Default)]
 pub struct CsvInputAdapter {
-    set_caracteristiques: Option<HashSet<String>>,
-    liste_menages: Option<Vec<Menage>>,
+    set_caracteristiques: Option<HashSet<Rc<String>>>,
+    liste_menages: Option<Vec<Rc<Menage>>>,
 }
 
 impl CsvInputAdapter {
     pub fn new() -> Self {
         CsvInputAdapter::default()
     }
-}
 
-impl CsvInputAdapter {
     pub fn populate_from_buf(
         &self,
         input_buf: &[u8],
-    ) -> KalkotoResult<(HashSet<String>, Vec<Menage>)> {
+    ) -> KalkotoResult<(HashSet<Rc<String>>, Vec<Rc<Menage>>)> {
         let mut rdr = ReaderBuilder::new()
             .delimiter(b';')
             .has_headers(false)
             .from_reader(input_buf);
 
-        let mut headers_row: Vec<String> = vec![];
-        let mut vec_menage: Vec<Menage> = vec![];
+        let mut headers_row: Vec<Rc<String>> = Vec::new();
+        let mut vec_menage: Vec<Rc<Menage>> = Vec::new();
 
         if let Some(result) = rdr.records().next() {
             let headers = result.map_err(|e| MenageListAdapterError::ValidationError {
@@ -54,9 +54,9 @@ impl CsvInputAdapter {
             })?;
 
             headers_row = headers
-                .iter()
-                .map(|str| str.to_string())
-                .collect::<Vec<String>>();
+                .into_iter()
+                .map(|str| Rc::new(String::from(str)))
+                .collect::<Vec<Rc<String>>>();
 
             for (index, row) in rdr.records().enumerate() {
                 let caracteristiques_vec: Vec<Caracteristique> = row
@@ -66,14 +66,14 @@ impl CsvInputAdapter {
                         conseil: "Vérifier le fichier CSV".to_string(),
                     })?
                     .iter()
-                    .map(|str| str.to_string())
+                    .map(|str| str)
                     .map(Caracteristique::from)
                     .collect();
 
-                let caracteristiques: HashMap<String, Caracteristique> = headers_row
+                let caracteristiques: HashMap<Rc<String>, Caracteristique> = headers_row
                     .iter()
-                    .cloned()
-                    .zip(caracteristiques_vec.iter().cloned())
+                    .map(|nom_carac| Rc::clone(nom_carac))
+                    .zip(caracteristiques_vec.iter())
                     .collect();
 
                 let menage = Menage {
@@ -81,11 +81,11 @@ impl CsvInputAdapter {
                     caracteristiques,
                 };
 
-                vec_menage.push(menage);
+                vec_menage.push(Rc::new(menage));
             }
         }
 
-        let headers_set: HashSet<String> = headers_row.into_iter().collect();
+        let headers_set: HashSet<Rc<String>> = headers_row.into_iter().collect();
 
         Ok((headers_set, vec_menage))
     }
