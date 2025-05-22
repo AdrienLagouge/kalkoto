@@ -63,13 +63,13 @@ impl Menage {
                 }
                 None => {
                     validator = false;
-                    fault_key = *nom_carac.clone();
+                    fault_key = Rc::clone(nom_carac).to_owned();
                     fault_index = self.index;
                     return (validator, fault_index, fault_key);
                 }
             }
             if !validator {
-                fault_key = nom_carac;
+                fault_key = Rc::clone(nom_carac).to_owned();
                 fault_index = self.index;
                 return (validator, fault_index, fault_key);
             };

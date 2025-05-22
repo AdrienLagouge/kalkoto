@@ -73,7 +73,7 @@ impl CsvInputAdapter {
                 let caracteristiques: HashMap<Rc<String>, Caracteristique> = headers_row
                     .iter()
                     .map(|nom_carac| Rc::clone(nom_carac))
-                    .zip(caracteristiques_vec.iter())
+                    .zip(caracteristiques_vec.iter().cloned())
                     .collect();
 
                 let menage = Menage {

@@ -88,7 +88,7 @@ impl MenageInputBuilder<EmptyList> {
 impl<U> MenageInputBuilder<U> where U: MenageList{
     pub fn from_unvalidated_liste_menage(
         self,
-        invalid_liste_menage: Vec<Menage>,
+        invalid_liste_menage: Vec<Rc<Menage>>,
     ) -> MenageInputBuilder<Unvalid> {
         MenageInputBuilder {
             set_caracteristiques: None,
