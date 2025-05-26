@@ -1,4 +1,5 @@
 use pyo3::prelude::*;
+use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::fmt;
 use std::mem;
@@ -39,23 +40,25 @@ where
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Menage {
     pub index: i32,
-    pub caracteristiques: HashMap<Rc<String>, Caracteristique>,
+    pub caracteristiques: Rc<HashMap<Rc<String>, Caracteristique>>,
 }
 
 impl Menage {
     pub fn new(index: i32) -> Self {
         Self {
             index,
-            caracteristiques: HashMap::new(),
+            caracteristiques: Rc::new(HashMap::new()),
         }
     }
 
-    pub fn compare_type_carac(self, other_menage: &Self) -> (bool, i32, String) {
+    pub fn compare_type_carac(&self, other_menage: &Self) -> (bool, i32, String) {
         let mut validator = true;
         let mut fault_index = -1;
         let mut fault_key = "".to_string();
 
-        for (nom_carac, type_carac) in &self.caracteristiques {
+        let caracteristiques = Rc::clone(&self.caracteristiques);
+
+        for (nom_carac, type_carac) in caracteristiques.iter() {
             match other_menage.caracteristiques.get(nom_carac) {
                 Some(other_type_carac) => {
                     validator = validator
@@ -63,13 +66,13 @@ impl Menage {
                 }
                 None => {
                     validator = false;
-                    fault_key = Rc::clone(nom_carac).to_owned();
+                    fault_key = nom_carac.to_string();
                     fault_index = self.index;
                     return (validator, fault_index, fault_key);
                 }
             }
             if !validator {
-                fault_key = Rc::clone(nom_carac).to_owned();
+                fault_key = nom_carac.to_string();
                 fault_index = self.index;
                 return (validator, fault_index, fault_key);
             };
@@ -80,8 +83,10 @@ impl Menage {
 
 impl fmt::Display for Menage {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let caracteristiques = Rc::clone(&self.caracteristiques);
+
         writeln!(f, "Le ménage {} a les caractéristiques :", self.index)?;
-        for (key, value) in &self.caracteristiques {
+        for (key, value) in caracteristiques.iter() {
             writeln!(f, "{} -> {}", key, value)?;
         }
         Ok(())

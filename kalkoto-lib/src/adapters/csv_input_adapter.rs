@@ -26,7 +26,7 @@ impl From<csv::Error> for MenageListAdapterError {
 #[derive(Debug, Default)]
 pub struct CsvInputAdapter {
     set_caracteristiques: Option<HashSet<Rc<String>>>,
-    liste_menages: Option<Vec<Rc<Menage>>>,
+    liste_menages: Option<Vec<Menage>>,
 }
 
 impl CsvInputAdapter {
@@ -37,60 +37,74 @@ impl CsvInputAdapter {
     pub fn populate_from_buf(
         &self,
         input_buf: &[u8],
-    ) -> KalkotoResult<(HashSet<Rc<String>>, Vec<Rc<Menage>>)> {
+    ) -> KalkotoResult<(HashSet<Rc<String>>, Vec<Menage>)> {
         let mut rdr = ReaderBuilder::new()
             .delimiter(b';')
             .has_headers(false)
             .from_reader(input_buf);
 
-        let mut headers_row: Vec<Rc<String>> = Vec::new();
-        let mut vec_menage: Vec<Rc<Menage>> = Vec::new();
+        let mut headers_row_set: HashSet<Rc<String>> = HashSet::new();
+        let mut vec_menage: Vec<Menage> = Vec::new();
 
-        if let Some(result) = rdr.records().next() {
-            let headers = result.map_err(|e| MenageListAdapterError::ValidationError {
-                fault_index: -1,
-                cause: "Problème à la lecture du header du CSV".to_string(),
-                conseil: "Vérifier le fichier CSV".to_string(),
-            })?;
+        let result_csv = match rdr.records().next() {
+            Some(result) => {
+                let headers = result.map_err(|e| MenageListAdapterError::ValidationError {
+                    fault_index: -1,
+                    cause: "Problème à la lecture du header du CSV".to_string(),
+                    conseil: "Vérifier le fichier CSV".to_string(),
+                })?;
 
-            headers_row = headers
-                .into_iter()
-                .map(|str| Rc::new(String::from(str)))
-                .collect::<Vec<Rc<String>>>();
+                let headers_vec: Vec<Rc<String>> =
+                    headers.iter().map(|s| Rc::new(s.to_string())).collect();
 
-            for (index, row) in rdr.records().enumerate() {
-                let caracteristiques_vec: Vec<Caracteristique> = row
-                    .map_err(|e| MenageListAdapterError::ValidationError {
-                        fault_index: index as i32,
-                        cause: "Les caractéristiques de ces ménages semblent invalides".to_string(),
-                        conseil: "Vérifier le fichier CSV".to_string(),
-                    })?
-                    .iter()
-                    .map(|str| str)
-                    .map(Caracteristique::from)
-                    .collect();
+                headers_row_set = headers_vec.clone().into_iter().collect();
 
-                let caracteristiques: HashMap<Rc<String>, Caracteristique> = headers_row
-                    .iter()
-                    .map(|nom_carac| Rc::clone(nom_carac))
-                    .zip(caracteristiques_vec.iter().cloned())
-                    .collect();
+                for (index, row) in rdr.records().enumerate() {
+                    let caracteristiques_vec: Vec<Caracteristique> = row
+                        .map_err(|e| MenageListAdapterError::ValidationError {
+                            fault_index: index as i32,
+                            cause: "Les caractéristiques de ces ménages semblent invalides"
+                                .to_string(),
+                            conseil: "Vérifier le fichier CSV".to_string(),
+                        })?
+                        .iter()
+                        .map(|str| str)
+                        .map(Caracteristique::from)
+                        .collect();
 
-                let menage = Menage {
-                    index: (index as i32) + 1i32,
-                    caracteristiques,
-                };
+                    let caracteristiques: HashMap<Rc<String>, Caracteristique> = headers_vec
+                        .iter()
+                        .zip(caracteristiques_vec.into_iter())
+                        .map(|(nom_carac, caracteristique)| {
+                            (Rc::clone(&nom_carac), caracteristique.to_owned())
+                        })
+                        .collect();
 
-                vec_menage.push(Rc::new(menage));
+                    let menage = Menage {
+                        index: (index as i32) + 1i32,
+                        caracteristiques: Rc::new(caracteristiques),
+                    };
+
+                    vec_menage.push(menage);
+                }
+                Ok((headers_row_set, vec_menage))
             }
-        }
-
-        let headers_set: HashSet<Rc<String>> = headers_row.into_iter().collect();
-
-        Ok((headers_set, vec_menage))
+            _ => Err(KalkotoError::ListMenageError(
+                MenageListAdapterError::ValidationError {
+                    fault_index: -1 as i32,
+                    cause: "Les caractéristiques de ces ménages semblent invalides".to_string(),
+                    conseil: "Vérifier le fichier CSV".to_string(),
+                },
+            )),
+        };
+        result_csv
     }
 
-    pub fn populate_from_path<P>(&self, path: P, buf_string: &mut String) -> KalkotoResult<Self>
+    pub fn populate_from_path<P>(
+        &self,
+        path: P,
+        buf_string: &'static mut String,
+    ) -> KalkotoResult<Self>
     where
         P: AsRef<Path>,
     {

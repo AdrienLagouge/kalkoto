@@ -5,7 +5,9 @@ use rayon::prelude::*;
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
 use std::ffi::CString;
-use std::sync::{Arc, Mutex};
+use std::rc::Rc;
+
+use super::menage::Caracteristique;
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct Parameters {
@@ -53,8 +55,14 @@ impl Composante {
                 .enumerate()
                 .try_for_each(|(index, menage)| -> KalkotoResult<()> {
                     let variables_dict_py = vec_variables_dict[index].clone().into_py_dict(py)?;
-                    let menage_carac_dict_py =
-                        menage.caracteristiques.to_owned().into_py_dict(py)?;
+
+                    let menage_caract_clone = Rc::clone(&menage.caracteristiques);
+
+                    let menage_carac_dict_py = menage_caract_clone
+                        .iter()
+                        .map(|(key, value)| ((**key).clone(), value.clone()))
+                        .collect::<HashMap<String, Caracteristique>>()
+                        .into_py_dict(py)?;
 
                     let args = (variables_dict_py, &params_dict_py, menage_carac_dict_py);
 

@@ -40,13 +40,13 @@ impl Debug for MenageListAdapterError {
 
 #[derive(Debug, Clone, PartialEq,Default)]
 pub struct MenageInput {
-   pub set_caracteristiques_valide: Rc<HashSet<String>>,
-   pub liste_menage_valide: Rc<Vec<Menage>>,
+   pub set_caracteristiques_valide: HashSet<Rc<String>>,
+   pub liste_menage_valide: Vec<Menage>,
 }
 
 impl MenageInput {
-    pub fn get_valid_input_menages(self) -> (HashSet<String>,Vec<Menage>) {
-        (self.set_caracteristiques_valide,self.liste_menage_valide)
+    pub fn get_valid_input_menages(&self) -> (&HashSet<Rc<String>>,&Vec<Menage>) {
+        (&self.set_caracteristiques_valide,&self.liste_menage_valide)
     }
 }
 
@@ -75,7 +75,7 @@ impl MenageList for Valid {}
 
 #[derive(Debug, Clone, Default)]
 pub struct MenageInputBuilder<U: MenageList> {
-    set_caracteristiques: Option<HashSet<String>>,
+    set_caracteristiques: Option<HashSet<Rc<String>>>,
     liste_menage: U,
 }
 
@@ -88,7 +88,7 @@ impl MenageInputBuilder<EmptyList> {
 impl<U> MenageInputBuilder<U> where U: MenageList{
     pub fn from_unvalidated_liste_menage(
         self,
-        invalid_liste_menage: Vec<Rc<Menage>>,
+        invalid_liste_menage: Vec<Menage>,
     ) -> MenageInputBuilder<Unvalid> {
         MenageInputBuilder {
             set_caracteristiques: None,
@@ -132,7 +132,7 @@ impl MenageInputBuilder<Unvalid> {
     pub fn validate_liste_menage(self) -> KalkotoResult<MenageInputBuilder<Valid>> {
         let valid_liste_menage = self.has_valid_liste_menage()?;
 
-        let validated_set_caracteristiques: HashSet<String> = self.liste_menage.0.first().unwrap()
+        let validated_set_caracteristiques: HashSet<Rc<String>> = self.liste_menage.0.first().unwrap()
             .caracteristiques
             .keys()
             .cloned()

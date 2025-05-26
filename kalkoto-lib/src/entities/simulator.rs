@@ -7,6 +7,7 @@ use rayon::prelude::*;
 use std::collections::{HashMap, HashSet};
 use std::fmt::{write, Write};
 use std::hash::Hash;
+use std::rc::{self, Rc};
 use std::vec;
 
 #[derive(thiserror::Error, Debug)]
@@ -95,10 +96,26 @@ impl SimulatorBuilder<ValidMenageInput, EmptyBaselineInput, EmptyVarianteInput> 
     {
         let baseline_policy_input = baseline_policy_adapter.create_valid_policy_input()?;
 
-        let diff_caracteristiques: HashSet<_> = baseline_policy_input
+        let valid_caracteristiques_menages = self
+            .menage_input
+            .0
+            .set_caracteristiques_valide
+            .iter()
+            .map(|s1| Rc::clone(s1))
+            .map(|s2| Rc::try_unwrap(s2))
+            .map(|s3| s3.unwrap())
+            .map(|s4| s4.as_str())
+            .collect::<HashSet<_>>();
+
+        let policy_caracteristiques = baseline_policy_input
             .valid_policy
             .caracteristiques_menages
-            .difference(&self.menage_input.0.set_caracteristiques_valide)
+            .iter()
+            .map(|s| s.as_str())
+            .collect::<HashSet<_>>();
+
+        let diff_caracteristiques: HashSet<_> = policy_caracteristiques
+            .difference(&valid_caracteristiques_menages)
             .clone()
             .collect();
 
@@ -198,11 +215,23 @@ impl SimulatorBuilder<ValidMenageInput, ValidBaselineInput, EmptyVarianteInput> 
     {
         let variante_policy_input = variante_policy_adapter.create_valid_policy_input()?;
 
+        let valid_caracteristiques_menages = self
+            .menage_input
+            .0
+            .set_caracteristiques_valide
+            .iter()
+            .map(|s| *s)
+            .map(|s| &s[..])
+            .collect::<HashSet<_>>();
+
         let intersect_caracteristiques = variante_policy_input
             .valid_policy
             .caracteristiques_menages
-            .intersection(&self.menage_input.0.set_caracteristiques_valide)
-            .cloned()
+            .iter()
+            .map(|s| s.as_str())
+            .collect::<HashSet<_>>()
+            .intersection(&valid_caracteristiques_menages)
+            .map(|s| s.to_string())
             .collect::<HashSet<String>>();
 
         let is_valid = intersect_caracteristiques
