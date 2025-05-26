@@ -13,12 +13,12 @@ fn main() {
 fn App() -> Element {
     let mut test_menage = Menage::new(1);
     test_menage.caracteristiques.insert(
-        "Name".to_owned(),
+        "Name".into(),
         Caracteristique::Textuel("Jeannot".to_owned()),
     );
     test_menage
         .caracteristiques
-        .insert("Age".to_owned(), Caracteristique::Entier(35));
+        .insert("Age".into(), Caracteristique::Entier(35));
     rsx! {
         div {
             "Coucou de mon appli Simulaction Sociale !"

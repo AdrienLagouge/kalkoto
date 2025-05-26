@@ -37,17 +37,39 @@ where
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct Menage {
     pub index: i32,
-    pub caracteristiques: Rc<HashMap<Rc<String>, Caracteristique>>,
+    pub caracteristiques: HashMap<Rc<str>, Caracteristique>,
+}
+
+impl PartialEq for Menage {
+    fn eq(&self, other: &Self) -> bool {
+        let index_eq = self.index == other.index;
+
+        let carac_self = self
+            .caracteristiques
+            .clone()
+            .into_iter()
+            .map(|(nom_carac, carac)| ((*nom_carac).to_string(), carac))
+            .collect::<HashMap<String, Caracteristique>>();
+
+        let carac_other = other
+            .caracteristiques
+            .clone()
+            .into_iter()
+            .map(|(nom_carac, carac)| ((*nom_carac).to_string(), carac))
+            .collect::<HashMap<String, Caracteristique>>();
+
+        index_eq && (carac_self == carac_other)
+    }
 }
 
 impl Menage {
     pub fn new(index: i32) -> Self {
         Self {
             index,
-            caracteristiques: Rc::new(HashMap::new()),
+            caracteristiques: HashMap::new(),
         }
     }
 
@@ -56,7 +78,7 @@ impl Menage {
         let mut fault_index = -1;
         let mut fault_key = "".to_string();
 
-        let caracteristiques = Rc::clone(&self.caracteristiques);
+        let caracteristiques = &self.caracteristiques;
 
         for (nom_carac, type_carac) in caracteristiques.iter() {
             match other_menage.caracteristiques.get(nom_carac) {
@@ -83,7 +105,7 @@ impl Menage {
 
 impl fmt::Display for Menage {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let caracteristiques = Rc::clone(&self.caracteristiques);
+        let caracteristiques = &self.caracteristiques;
 
         writeln!(f, "Le ménage {} a les caractéristiques :", self.index)?;
         for (key, value) in caracteristiques.iter() {
@@ -99,25 +121,25 @@ mod tests {
 
     #[test]
     fn ok_compar_carac() {
-        let wanted = (true, -1, "");
+        let wanted = (true, -1, "".to_string());
 
         let mut first_menage = Menage::new(1);
         first_menage
             .caracteristiques
-            .insert(String::from("Age"), Caracteristique::Entier(30));
+            .insert(Rc::from("Age"), Caracteristique::Entier(30));
 
         first_menage
             .caracteristiques
-            .insert(String::from("Revenu"), Caracteristique::Numeric(500.65f64));
+            .insert(Rc::from("Revenu"), Caracteristique::Numeric(500.65f64));
 
         let mut second_menage = Menage::new(2);
         second_menage
             .caracteristiques
-            .insert(String::from("Age"), Caracteristique::Entier(30));
+            .insert(Rc::from("Age"), Caracteristique::Entier(30));
 
         second_menage
             .caracteristiques
-            .insert(String::from("Revenu"), Caracteristique::Numeric(400.45f64));
+            .insert(Rc::from("Revenu"), Caracteristique::Numeric(400.45f64));
 
         let result = first_menage.compare_type_carac(&second_menage);
         assert_eq!(wanted, result);
@@ -125,25 +147,25 @@ mod tests {
 
     #[test]
     fn unmatched_types_compar_carac() {
-        let wanted = (false, 1, "Revenu");
+        let wanted = (false, 1, "Revenu".to_string());
 
         let mut first_menage = Menage::new(1);
         first_menage
             .caracteristiques
-            .insert(String::from("Age"), Caracteristique::Entier(30));
+            .insert(Rc::from("Age"), Caracteristique::Entier(30));
 
         first_menage
             .caracteristiques
-            .insert(String::from("Revenu"), Caracteristique::Numeric(500.65f64));
+            .insert(Rc::from("Revenu"), Caracteristique::Numeric(500.65f64));
 
         let mut second_menage = Menage::new(2);
         second_menage
             .caracteristiques
-            .insert(String::from("Age"), Caracteristique::Entier(30));
+            .insert(Rc::from("Age"), Caracteristique::Entier(30));
 
         second_menage
             .caracteristiques
-            .insert(String::from("Revenu"), Caracteristique::Entier(400));
+            .insert(Rc::from("Revenu"), Caracteristique::Entier(400));
 
         let result = first_menage.compare_type_carac(&second_menage);
         assert_eq!(wanted, result);
@@ -151,25 +173,25 @@ mod tests {
 
     #[test]
     fn unmatched_nom_compar_carac() {
-        let wanted = (false, 1, "TypeLogement");
+        let wanted = (false, 1, "TypeLogement".to_string());
 
         let mut first_menage = Menage::new(1);
         first_menage
             .caracteristiques
-            .insert(String::from("Age"), Caracteristique::Entier(30));
+            .insert(Rc::from("Age"), Caracteristique::Entier(30));
 
         first_menage.caracteristiques.insert(
-            String::from("TypeLogement"),
+            Rc::from("TypeLogement"),
             Caracteristique::Textuel("Locataire".to_owned()),
         );
 
         let mut second_menage = Menage::new(2);
         second_menage
             .caracteristiques
-            .insert(String::from("Age"), Caracteristique::Entier(30));
+            .insert(Rc::from("Age"), Caracteristique::Entier(30));
 
         second_menage.caracteristiques.insert(
-            String::from("TypeLogenment"),
+            Rc::from("TypeLogenment"),
             Caracteristique::Textuel("Locataire".to_owned()),
         );
 

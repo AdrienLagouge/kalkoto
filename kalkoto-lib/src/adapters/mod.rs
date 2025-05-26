@@ -40,12 +40,12 @@ impl Debug for MenageListAdapterError {
 
 #[derive(Debug, Clone, PartialEq,Default)]
 pub struct MenageInput {
-   pub set_caracteristiques_valide: HashSet<Rc<String>>,
+   pub set_caracteristiques_valide: HashSet<Rc<str>>,
    pub liste_menage_valide: Vec<Menage>,
 }
 
 impl MenageInput {
-    pub fn get_valid_input_menages(&self) -> (&HashSet<Rc<String>>,&Vec<Menage>) {
+    pub fn get_valid_input_menages(&self) -> (&HashSet<Rc<str>>,&Vec<Menage>) {
         (&self.set_caracteristiques_valide,&self.liste_menage_valide)
     }
 }
@@ -75,7 +75,7 @@ impl MenageList for Valid {}
 
 #[derive(Debug, Clone, Default)]
 pub struct MenageInputBuilder<U: MenageList> {
-    set_caracteristiques: Option<HashSet<Rc<String>>>,
+    set_caracteristiques: Option<HashSet<Rc<str>>>,
     liste_menage: U,
 }
 
@@ -132,7 +132,7 @@ impl MenageInputBuilder<Unvalid> {
     pub fn validate_liste_menage(self) -> KalkotoResult<MenageInputBuilder<Valid>> {
         let valid_liste_menage = self.has_valid_liste_menage()?;
 
-        let validated_set_caracteristiques: HashSet<Rc<String>> = self.liste_menage.0.first().unwrap()
+        let validated_set_caracteristiques: HashSet<Rc<str>> = self.liste_menage.0.first().unwrap()
             .caracteristiques
             .keys()
             .cloned()
@@ -219,36 +219,36 @@ mod tests {
         let mut first_menage = Menage::new(1);
         first_menage
             .caracteristiques
-            .insert(String::from("Age"), Caracteristique::Entier(30));
+            .insert(Rc::from("Age"), Caracteristique::Entier(30));
 
         first_menage
             .caracteristiques
-            .insert(String::from("Revenu"), Caracteristique::Numeric(100.0f64));
+            .insert(Rc::from("Revenu"), Caracteristique::Numeric(100.0f64));
 
         let mut second_menage = Menage::new(2);
         second_menage
             .caracteristiques
-            .insert(String::from("Age"), Caracteristique::Entier(35));
+            .insert(Rc::from("Age"), Caracteristique::Entier(35));
 
         second_menage
             .caracteristiques
-            .insert(String::from("Revenu"), Caracteristique::Numeric(200.0f64));
+            .insert(Rc::from("Revenu"), Caracteristique::Numeric(200.0f64));
 
         let mut third_menage = Menage::new(3);
         third_menage
             .caracteristiques
-            .insert(String::from("Age"), Caracteristique::Entier(40));
+            .insert(Rc::from("Age"), Caracteristique::Entier(40));
 
         third_menage
             .caracteristiques
-            .insert(String::from("Revenu"), Caracteristique::Numeric(300.0f64));
+            .insert(Rc::from("Revenu"), Caracteristique::Numeric(300.0f64));
 
         let valide_menage_list = vec![first_menage, second_menage, third_menage];
 
         let mut valide_caracteristiques = HashSet::new();
-        valide_caracteristiques.insert("Age".to_string());
-        valide_caracteristiques.insert("Revenu".to_string());
-        valide_caracteristiques.insert("Age".to_string());
+        valide_caracteristiques.insert("Age".into());
+        valide_caracteristiques.insert("Revenu".into());
+        valide_caracteristiques.insert("Age".into());
 
 
         let wanted = MenageInput {
@@ -271,30 +271,30 @@ mod tests {
         let mut first_menage = Menage::new(1);
         first_menage
             .caracteristiques
-            .insert(String::from("Age"), Caracteristique::Entier(30));
+            .insert(Rc::from("Age"), Caracteristique::Entier(30));
 
         first_menage
             .caracteristiques
-            .insert(String::from("Revenu"), Caracteristique::Numeric(100.0f64));
+            .insert(Rc::from("Revenu"), Caracteristique::Numeric(100.0f64));
 
         let mut second_menage = Menage::new(2);
         second_menage
             .caracteristiques
-            .insert(String::from("Age"), Caracteristique::Entier(35));
+            .insert(Rc::from("Age"), Caracteristique::Entier(35));
 
         second_menage
             .caracteristiques
-            .insert(String::from("Revenu"), Caracteristique::Numeric(200.0f64));
+            .insert(Rc::from("Revenu"), Caracteristique::Numeric(200.0f64));
 
         let mut third_menage = Menage::new(3);
         third_menage.caracteristiques.insert(
-            String::from("Age"),
+            Rc::from("Age"),
             Caracteristique::Textuel("40".to_string()),
         );
 
         third_menage
             .caracteristiques
-            .insert(String::from("Revenu"), Caracteristique::Numeric(300.0f64));
+            .insert(Rc::from("Revenu"), Caracteristique::Numeric(300.0f64));
 
         let invalid_menage_list = vec![first_menage, second_menage, third_menage];
 

@@ -56,11 +56,11 @@ impl Composante {
                 .try_for_each(|(index, menage)| -> KalkotoResult<()> {
                     let variables_dict_py = vec_variables_dict[index].clone().into_py_dict(py)?;
 
-                    let menage_caract_clone = Rc::clone(&menage.caracteristiques);
+                    let menage_caract = &menage.caracteristiques;
 
-                    let menage_carac_dict_py = menage_caract_clone
-                        .iter()
-                        .map(|(key, value)| ((**key).clone(), value.clone()))
+                    let menage_carac_dict_py = menage_caract
+                        .into_iter()
+                        .map(|(key, value)| ((*key).to_string().clone(), value.clone()))
                         .collect::<HashMap<String, Caracteristique>>()
                         .into_py_dict(py)?;
 

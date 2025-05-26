@@ -101,18 +101,11 @@ impl SimulatorBuilder<ValidMenageInput, EmptyBaselineInput, EmptyVarianteInput> 
             .0
             .set_caracteristiques_valide
             .iter()
-            .map(|s1| Rc::clone(s1))
-            .map(|s2| Rc::try_unwrap(s2))
-            .map(|s3| s3.unwrap())
-            .map(|s4| s4.as_str())
+            .map(|s1| Rc::clone(&s1))
+            .map(move |s2| (*s2).to_string())
             .collect::<HashSet<_>>();
 
-        let policy_caracteristiques = baseline_policy_input
-            .valid_policy
-            .caracteristiques_menages
-            .iter()
-            .map(|s| s.as_str())
-            .collect::<HashSet<_>>();
+        let policy_caracteristiques = &baseline_policy_input.valid_policy.caracteristiques_menages;
 
         let diff_caracteristiques: HashSet<_> = policy_caracteristiques
             .difference(&valid_caracteristiques_menages)
@@ -215,23 +208,20 @@ impl SimulatorBuilder<ValidMenageInput, ValidBaselineInput, EmptyVarianteInput> 
     {
         let variante_policy_input = variante_policy_adapter.create_valid_policy_input()?;
 
-        let valid_caracteristiques_menages = self
+        let valid_caracteristiques_menages = &self
             .menage_input
             .0
             .set_caracteristiques_valide
             .iter()
-            .map(|s| *s)
-            .map(|s| &s[..])
+            .map(|s| Rc::clone(&s))
+            .map(|s| s.to_string())
             .collect::<HashSet<_>>();
 
         let intersect_caracteristiques = variante_policy_input
             .valid_policy
             .caracteristiques_menages
-            .iter()
-            .map(|s| s.as_str())
-            .collect::<HashSet<_>>()
             .intersection(&valid_caracteristiques_menages)
-            .map(|s| s.to_string())
+            .cloned()
             .collect::<HashSet<String>>();
 
         let is_valid = intersect_caracteristiques

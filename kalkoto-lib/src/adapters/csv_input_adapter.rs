@@ -25,7 +25,7 @@ impl From<csv::Error> for MenageListAdapterError {
 
 #[derive(Debug, Default)]
 pub struct CsvInputAdapter {
-    set_caracteristiques: Option<HashSet<Rc<String>>>,
+    set_caracteristiques: Option<HashSet<Rc<str>>>,
     liste_menages: Option<Vec<Menage>>,
 }
 
@@ -37,13 +37,13 @@ impl CsvInputAdapter {
     pub fn populate_from_buf(
         &self,
         input_buf: &[u8],
-    ) -> KalkotoResult<(HashSet<Rc<String>>, Vec<Menage>)> {
+    ) -> KalkotoResult<(HashSet<Rc<str>>, Vec<Menage>)> {
         let mut rdr = ReaderBuilder::new()
             .delimiter(b';')
             .has_headers(false)
             .from_reader(input_buf);
 
-        let mut headers_row_set: HashSet<Rc<String>> = HashSet::new();
+        let mut headers_row_set: HashSet<Rc<str>> = HashSet::new();
         let mut vec_menage: Vec<Menage> = Vec::new();
 
         let result_csv = match rdr.records().next() {
@@ -54,10 +54,11 @@ impl CsvInputAdapter {
                     conseil: "Vérifier le fichier CSV".to_string(),
                 })?;
 
-                let headers_vec: Vec<Rc<String>> =
-                    headers.iter().map(|s| Rc::new(s.to_string())).collect();
+                let headers_vec: Vec<Rc<str>> = headers.iter().map(|s| Rc::from(s)).collect();
 
-                headers_row_set = headers_vec.clone().into_iter().collect();
+                headers_row_set = headers_vec.clone().into_iter().collect::<HashSet<_>>();
+
+                let headers_vec_clone: Vec<Rc<str>> = headers_vec.clone();
 
                 for (index, row) in rdr.records().enumerate() {
                     let caracteristiques_vec: Vec<Caracteristique> = row
@@ -72,7 +73,7 @@ impl CsvInputAdapter {
                         .map(Caracteristique::from)
                         .collect();
 
-                    let caracteristiques: HashMap<Rc<String>, Caracteristique> = headers_vec
+                    let caracteristiques: HashMap<Rc<str>, Caracteristique> = headers_vec_clone
                         .iter()
                         .zip(caracteristiques_vec.into_iter())
                         .map(|(nom_carac, caracteristique)| {
@@ -82,7 +83,7 @@ impl CsvInputAdapter {
 
                     let menage = Menage {
                         index: (index as i32) + 1i32,
-                        caracteristiques: Rc::new(caracteristiques),
+                        caracteristiques: caracteristiques,
                     };
 
                     vec_menage.push(menage);
@@ -100,11 +101,7 @@ impl CsvInputAdapter {
         result_csv
     }
 
-    pub fn populate_from_path<P>(
-        &self,
-        path: P,
-        buf_string: &'static mut String,
-    ) -> KalkotoResult<Self>
+    pub fn populate_from_path<P>(&self, path: P, buf_string: &mut String) -> KalkotoResult<Self>
     where
         P: AsRef<Path>,
     {
@@ -163,15 +160,15 @@ mod tests {
         static VALID_CSV_BYTES: &[u8] = "Age;Revenu;TypeLogement\n35;500.5;Locataire".as_bytes();
 
         let mut wanted_hashset: HashSet<String> = HashSet::new();
-        wanted_hashset.insert("Age".to_string());
-        wanted_hashset.insert("Revenu".to_string());
-        wanted_hashset.insert("TypeLogement".to_string());
+        wanted_hashset.insert("Age".into());
+        wanted_hashset.insert("Revenu".into());
+        wanted_hashset.insert("TypeLogement".into());
 
-        let mut wanted_hashmap: HashMap<String, Caracteristique> = HashMap::new();
-        wanted_hashmap.insert("Age".to_string(), Caracteristique::Entier(35));
-        wanted_hashmap.insert("Revenu".to_string(), Caracteristique::Numeric(500.5));
+        let mut wanted_hashmap: HashMap<Rc<str>, Caracteristique> = HashMap::new();
+        wanted_hashmap.insert("Age".into(), Caracteristique::Entier(35));
+        wanted_hashmap.insert("Revenu".into(), Caracteristique::Numeric(500.5));
         wanted_hashmap.insert(
-            "TypeLogement".to_string(),
+            "TypeLogement".into(),
             Caracteristique::Textuel("Locataire".to_string()),
         );
 
@@ -182,6 +179,11 @@ mod tests {
 
         let (result_hashset, result_vec_menage) =
             CsvInputAdapter::new().populate_from_buf(VALID_CSV_BYTES)?;
+
+        let result_hashset = result_hashset
+            .into_iter()
+            .map(|carac| (*carac).to_string())
+            .collect::<HashSet<String>>();
 
         let wanted = true;
         let result = (wanted_hashset == result_hashset) && (wanted_vec_menage == result_vec_menage);
@@ -239,15 +241,15 @@ mod tests {
         fs::write(&file_path, VALID_CSV_BYTES).map_err(MenageListAdapterError::IO)?;
 
         let mut wanted_hashset: HashSet<String> = HashSet::new();
-        wanted_hashset.insert("Age".to_string());
-        wanted_hashset.insert("Revenu".to_string());
-        wanted_hashset.insert("TypeLogement".to_string());
+        wanted_hashset.insert("Age".into());
+        wanted_hashset.insert("Revenu".into());
+        wanted_hashset.insert("TypeLogement".into());
 
-        let mut wanted_hashmap: HashMap<String, Caracteristique> = HashMap::new();
-        wanted_hashmap.insert("Age".to_string(), Caracteristique::Entier(35));
-        wanted_hashmap.insert("Revenu".to_string(), Caracteristique::Numeric(500.5));
+        let mut wanted_hashmap: HashMap<Rc<str>, Caracteristique> = HashMap::new();
+        wanted_hashmap.insert("Age".into(), Caracteristique::Entier(35));
+        wanted_hashmap.insert("Revenu".into(), Caracteristique::Numeric(500.5));
         wanted_hashmap.insert(
-            "TypeLogement".to_string(),
+            "TypeLogement".into(),
             Caracteristique::Textuel("Locataire".to_string()),
         );
 
@@ -257,15 +259,20 @@ mod tests {
         }];
 
         let mut csv_content = String::new();
-        let CsvInputAdapter {
-            set_caracteristiques: result_hashset,
-            liste_menages: result_vec_menage,
-        } = CsvInputAdapter::new().populate_from_path(file_path, &mut csv_content)?;
+        let test_csv_adapter =
+            CsvInputAdapter::new().populate_from_path(file_path, &mut csv_content)?;
+
+        let result_hashset = test_csv_adapter
+            .set_caracteristiques
+            .unwrap()
+            .into_iter()
+            .map(|carac| (*carac).to_string())
+            .collect::<HashSet<String>>();
 
         let wanted = true;
 
-        let result = (wanted_hashset == result_hashset.unwrap())
-            && (wanted_vec_menage == result_vec_menage.unwrap());
+        let result = (wanted_hashset == result_hashset)
+            && (wanted_vec_menage == test_csv_adapter.liste_menages.unwrap());
         assert_eq!(wanted, result);
 
         drop(tmp_file);
