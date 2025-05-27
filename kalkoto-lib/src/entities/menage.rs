@@ -40,7 +40,7 @@ where
 #[derive(Debug, Clone, Default)]
 pub struct Menage {
     pub index: i32,
-    pub caracteristiques: Rc<HashMap<Rc<str>, Caracteristique>>,
+    pub caracteristiques: HashMap<String, Caracteristique>,
 }
 
 impl PartialEq for Menage {

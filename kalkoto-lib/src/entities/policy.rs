@@ -1,5 +1,5 @@
 use crate::{entities::menage::Menage, prelude::*};
-use pyo3::{prelude::*, types::IntoPyDict, types::PyDict};
+use pyo3::{prelude::*, types::IntoPyDict, types::PyDict, types::PyList};
 use pyo3_ffi::c_str;
 use rayon::prelude::*;
 use serde::Deserialize;
@@ -36,8 +36,6 @@ impl Composante {
         vec_variables_dict: &mut [HashMap<String, f64>],
         parameters_dict: &HashMap<String, f64>,
     ) -> KalkotoResult<()> {
-        pyo3::prepare_freethreaded_python();
-
         let output = Python::with_gil(|py| -> PyResult<()> {
             let composantemodule = PyModule::from_code(
                 py,
@@ -50,43 +48,37 @@ impl Composante {
 
             let params_dict_py = parameters_dict.into_py_dict(py)?;
 
-            menages
+            let vec_menage_caract_dict: Bound<'_, PyList> = menages
                 .iter()
-                .enumerate()
-                .try_for_each(|(index, menage)| -> KalkotoResult<()> {
-                    let variables_dict_py = vec_variables_dict[index].clone().into_py_dict(py)?;
+                .map(|m| &m.caracteristiques)
+                .map(|menage_caract| menage_caract.into_py_dict(py)?)
+                .collect::<Vec<&Bound<'_, PyDict>>>()
+                .into_pyobject(py)?;
 
-                    let menage_caract = Rc::clone(&menage.caracteristiques);
+            for (index, menage) in menages {
+                let variables_dict_py = *vec_variables_dict[index];
+                let variables_dict_py = variables_dict_py.into_py_dict(py)?;
 
-                    let menage_carac_dict_py = menage_caract
-                        .iter()
-                        .map(|(key, value)| (Rc::clone(&key), value))
-                        .map(|(key, value)| (&*key, value))
-                        //.collect::<HashMap<&str, &Caracteristique>>()
-                        .into_py_dict(py)?;
+                let menage_caract_dict_py = vec_menage_caract_dict.get_item(index)?;
 
-                    let args = (variables_dict_py, &params_dict_py, menage_carac_dict_py);
+                let args = (&variables_dict_py, &params_dict_py, &menage_carac_dict_py);
 
-                    let result = rustfunc.call(args, None);
+                let result = rustfunc.call(args, None);
 
-                    match result {
-                        Ok(result) => {
-                            let output_py = result.extract()?;
-                            vec_variables_dict[index].insert(self.name.to_owned(), output_py);
-                        }
-                        Err(e) => println!(
-                            "Erreur lors du calcul de la composante {} ; {}",
-                            self.name,
-                            e.to_string()
-                        ),
-                    };
-
-                    Ok(())
-                });
-            Ok(())
-        });
-        Ok(output?)
-    }
+                match result {
+                    Ok(result) => {
+                        let output_py = result.extract()?;
+                        variables_dict_py.insert(self.name.to_owned(), output_py);
+                    }
+                    Err(e) => println!(
+                        "Erreur lors du calcul de la composante {} ; {}",
+                        self.name,
+                        e.to_string()
+                    ),
+                };
+                Ok(())
+            }
+    Ok(())}
 }
 
 #[derive(Deserialize, Debug, Clone)]
