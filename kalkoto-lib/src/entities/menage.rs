@@ -40,7 +40,7 @@ where
 #[derive(Debug, Clone, Default)]
 pub struct Menage {
     pub index: i32,
-    pub caracteristiques: HashMap<Rc<str>, Caracteristique>,
+    pub caracteristiques: Rc<HashMap<Rc<str>, Caracteristique>>,
 }
 
 impl PartialEq for Menage {
@@ -50,15 +50,15 @@ impl PartialEq for Menage {
         let carac_self = self
             .caracteristiques
             .clone()
-            .into_iter()
-            .map(|(nom_carac, carac)| ((*nom_carac).to_string(), carac))
+            .iter()
+            .map(|(nom_carac, carac)| ((*nom_carac).to_string(), carac.to_owned()))
             .collect::<HashMap<String, Caracteristique>>();
 
         let carac_other = other
             .caracteristiques
             .clone()
-            .into_iter()
-            .map(|(nom_carac, carac)| ((*nom_carac).to_string(), carac))
+            .iter()
+            .map(|(nom_carac, carac)| ((*nom_carac).to_string(), carac.to_owned()))
             .collect::<HashMap<String, Caracteristique>>();
 
         index_eq && (carac_self == carac_other)
@@ -69,7 +69,7 @@ impl Menage {
     pub fn new(index: i32) -> Self {
         Self {
             index,
-            caracteristiques: HashMap::new(),
+            caracteristiques: Rc::new(HashMap::new()),
         }
     }
 

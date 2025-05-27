@@ -56,8 +56,6 @@ impl CsvInputAdapter {
 
                 let headers_vec: Vec<Rc<str>> = headers.iter().map(|s| Rc::from(s)).collect();
 
-                headers_row_set = headers_vec.clone().into_iter().collect::<HashSet<_>>();
-
                 let headers_vec_clone: Vec<Rc<str>> = headers_vec.clone();
 
                 for (index, row) in rdr.records().enumerate() {
@@ -83,11 +81,14 @@ impl CsvInputAdapter {
 
                     let menage = Menage {
                         index: (index as i32) + 1i32,
-                        caracteristiques: caracteristiques,
+                        caracteristiques: Rc::new(caracteristiques),
                     };
 
                     vec_menage.push(menage);
                 }
+
+                headers_row_set = headers_vec.into_iter().collect::<HashSet<_>>();
+
                 Ok((headers_row_set, vec_menage))
             }
             _ => Err(KalkotoError::ListMenageError(
