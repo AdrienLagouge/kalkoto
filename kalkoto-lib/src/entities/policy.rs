@@ -36,6 +36,8 @@ impl Composante {
         vec_variables_dict: &mut [HashMap<String, f64>],
         parameters_dict: &HashMap<String, f64>,
     ) -> KalkotoResult<()> {
+        pyo3::prepare_freethreaded_python();
+
         let output = Python::with_gil(|py| -> PyResult<()> {
             let composantemodule = PyModule::from_code(
                 py,
