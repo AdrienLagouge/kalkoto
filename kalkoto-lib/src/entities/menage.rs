@@ -69,7 +69,7 @@ impl Menage {
     pub fn new(index: i32) -> Self {
         Self {
             index,
-            caracteristiques: Rc::new(HashMap::new()),
+            caracteristiques: HashMap::new(),
         }
     }
 
@@ -126,20 +126,20 @@ mod tests {
         let mut first_menage = Menage::new(1);
         first_menage
             .caracteristiques
-            .insert(Rc::from("Age"), Caracteristique::Entier(30));
+            .insert(String::from("Age"), Caracteristique::Entier(30));
 
         first_menage
             .caracteristiques
-            .insert(Rc::from("Revenu"), Caracteristique::Numeric(500.65f64));
+            .insert(String::from("Revenu"), Caracteristique::Numeric(500.65f64));
 
         let mut second_menage = Menage::new(2);
         second_menage
             .caracteristiques
-            .insert(Rc::from("Age"), Caracteristique::Entier(30));
+            .insert(String::from("Age"), Caracteristique::Entier(30));
 
         second_menage
             .caracteristiques
-            .insert(Rc::from("Revenu"), Caracteristique::Numeric(400.45f64));
+            .insert(String::from("Revenu"), Caracteristique::Numeric(400.45f64));
 
         let result = first_menage.compare_type_carac(&second_menage);
         assert_eq!(wanted, result);
@@ -152,20 +152,20 @@ mod tests {
         let mut first_menage = Menage::new(1);
         first_menage
             .caracteristiques
-            .insert(Rc::from("Age"), Caracteristique::Entier(30));
+            .insert(String::from("Age"), Caracteristique::Entier(30));
 
         first_menage
             .caracteristiques
-            .insert(Rc::from("Revenu"), Caracteristique::Numeric(500.65f64));
+            .insert(String::from("Revenu"), Caracteristique::Numeric(500.65f64));
 
         let mut second_menage = Menage::new(2);
         second_menage
             .caracteristiques
-            .insert(Rc::from("Age"), Caracteristique::Entier(30));
+            .insert(String::from("Age"), Caracteristique::Entier(30));
 
         second_menage
             .caracteristiques
-            .insert(Rc::from("Revenu"), Caracteristique::Entier(400));
+            .insert(String::from("Revenu"), Caracteristique::Entier(400));
 
         let result = first_menage.compare_type_carac(&second_menage);
         assert_eq!(wanted, result);
@@ -178,20 +178,20 @@ mod tests {
         let mut first_menage = Menage::new(1);
         first_menage
             .caracteristiques
-            .insert(Rc::from("Age"), Caracteristique::Entier(30));
+            .insert(String::from("Age"), Caracteristique::Entier(30));
 
         first_menage.caracteristiques.insert(
-            Rc::from("TypeLogement"),
+            String::from("TypeLogement"),
             Caracteristique::Textuel("Locataire".to_owned()),
         );
 
         let mut second_menage = Menage::new(2);
         second_menage
             .caracteristiques
-            .insert(Rc::from("Age"), Caracteristique::Entier(30));
+            .insert(String::from("Age"), Caracteristique::Entier(30));
 
         second_menage.caracteristiques.insert(
-            Rc::from("TypeLogenment"),
+            String::from("TypeLogenment"),
             Caracteristique::Textuel("Locataire".to_owned()),
         );
 

@@ -96,14 +96,7 @@ impl SimulatorBuilder<ValidMenageInput, EmptyBaselineInput, EmptyVarianteInput> 
     {
         let baseline_policy_input = baseline_policy_adapter.create_valid_policy_input()?;
 
-        let valid_caracteristiques_menages = self
-            .menage_input
-            .0
-            .set_caracteristiques_valide
-            .iter()
-            .map(|s1| Rc::clone(&s1))
-            .map(move |s2| (*s2).to_string())
-            .collect::<HashSet<_>>();
+        let valid_caracteristiques_menages = &self.menage_input.0.set_caracteristiques_valide;
 
         let policy_caracteristiques = &baseline_policy_input.valid_policy.caracteristiques_menages;
 
@@ -208,14 +201,7 @@ impl SimulatorBuilder<ValidMenageInput, ValidBaselineInput, EmptyVarianteInput> 
     {
         let variante_policy_input = variante_policy_adapter.create_valid_policy_input()?;
 
-        let valid_caracteristiques_menages = &self
-            .menage_input
-            .0
-            .set_caracteristiques_valide
-            .iter()
-            .map(|s| Rc::clone(&s))
-            .map(|s| s.to_string())
-            .collect::<HashSet<_>>();
+        let valid_caracteristiques_menages = &self.menage_input.0.set_caracteristiques_valide;
 
         let intersect_caracteristiques = variante_policy_input
             .valid_policy

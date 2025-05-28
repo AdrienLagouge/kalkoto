@@ -25,7 +25,7 @@ impl From<csv::Error> for MenageListAdapterError {
 
 #[derive(Debug, Default)]
 pub struct CsvInputAdapter {
-    set_caracteristiques: Option<HashSet<Rc<str>>>,
+    set_caracteristiques: Option<HashSet<String>>,
     liste_menages: Option<Vec<Menage>>,
 }
 
@@ -37,13 +37,13 @@ impl CsvInputAdapter {
     pub fn populate_from_buf(
         &self,
         input_buf: &[u8],
-    ) -> KalkotoResult<(HashSet<Rc<str>>, Vec<Menage>)> {
+    ) -> KalkotoResult<(HashSet<String>, Vec<Menage>)> {
         let mut rdr = ReaderBuilder::new()
             .delimiter(b';')
             .has_headers(false)
             .from_reader(input_buf);
 
-        let mut headers_row_set: HashSet<Rc<str>> = HashSet::new();
+        let mut headers_row_set: HashSet<String> = HashSet::new();
         let mut vec_menage: Vec<Menage> = Vec::new();
 
         let result_csv = match rdr.records().next() {
@@ -54,9 +54,7 @@ impl CsvInputAdapter {
                     conseil: "Vérifier le fichier CSV".to_string(),
                 })?;
 
-                let headers_vec: Vec<Rc<str>> = headers.iter().map(|s| Rc::from(s)).collect();
-
-                let headers_vec_clone: Vec<Rc<str>> = headers_vec.clone();
+                let headers_vec: Vec<&str> = headers.iter().collect();
 
                 for (index, row) in rdr.records().enumerate() {
                     let caracteristiques_vec: Vec<Caracteristique> = row
@@ -71,23 +69,26 @@ impl CsvInputAdapter {
                         .map(Caracteristique::from)
                         .collect();
 
-                    let caracteristiques: HashMap<Rc<str>, Caracteristique> = headers_vec_clone
+                    let caracteristiques: HashMap<String, Caracteristique> = headers_vec
                         .iter()
                         .zip(caracteristiques_vec.into_iter())
                         .map(|(nom_carac, caracteristique)| {
-                            (Rc::clone(&nom_carac), caracteristique.to_owned())
+                            (String::from(*nom_carac), caracteristique)
                         })
                         .collect();
 
                     let menage = Menage {
                         index: (index as i32) + 1i32,
-                        caracteristiques: Rc::new(caracteristiques),
+                        caracteristiques: caracteristiques,
                     };
 
                     vec_menage.push(menage);
                 }
 
-                headers_row_set = headers_vec.into_iter().collect::<HashSet<_>>();
+                headers_row_set = headers_vec
+                    .into_iter()
+                    .map(|nom_carac| String::from(nom_carac))
+                    .collect::<HashSet<_>>();
 
                 Ok((headers_row_set, vec_menage))
             }
@@ -165,7 +166,7 @@ mod tests {
         wanted_hashset.insert("Revenu".into());
         wanted_hashset.insert("TypeLogement".into());
 
-        let mut wanted_hashmap: HashMap<Rc<str>, Caracteristique> = HashMap::new();
+        let mut wanted_hashmap: HashMap<String, Caracteristique> = HashMap::new();
         wanted_hashmap.insert("Age".into(), Caracteristique::Entier(35));
         wanted_hashmap.insert("Revenu".into(), Caracteristique::Numeric(500.5));
         wanted_hashmap.insert(
@@ -246,7 +247,7 @@ mod tests {
         wanted_hashset.insert("Revenu".into());
         wanted_hashset.insert("TypeLogement".into());
 
-        let mut wanted_hashmap: HashMap<Rc<str>, Caracteristique> = HashMap::new();
+        let mut wanted_hashmap: HashMap<String, Caracteristique> = HashMap::new();
         wanted_hashmap.insert("Age".into(), Caracteristique::Entier(35));
         wanted_hashmap.insert("Revenu".into(), Caracteristique::Numeric(500.5));
         wanted_hashmap.insert(

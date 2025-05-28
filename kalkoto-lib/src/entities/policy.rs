@@ -48,37 +48,36 @@ impl Composante {
 
             let params_dict_py = parameters_dict.into_py_dict(py)?;
 
-            let vec_menage_caract_dict: Bound<'_, PyList> = menages
+            let vec_menage_caract_dict: PyResult<Vec<Bound<'_, PyDict>>> = menages
                 .iter()
                 .map(|m| &m.caracteristiques)
-                .map(|menage_caract| menage_caract.into_py_dict(py)?)
-                .collect::<Vec<&Bound<'_, PyDict>>>()
-                .into_pyobject(py)?;
+                .map(|menage_caract| menage_caract.clone().into_py_dict(py))
+                .collect();
 
-            for (index, menage) in menages {
-                let variables_dict_py = *vec_variables_dict[index];
-                let variables_dict_py = variables_dict_py.into_py_dict(py)?;
+            let vec_menage_caract_dict = &vec_menage_caract_dict?;
 
-                let menage_caract_dict_py = vec_menage_caract_dict.get_item(index)?;
+            for index in 0..menages.len() {
+                let variables_dict = &mut vec_variables_dict[index];
+                let variables_dict_py = (*variables_dict).clone().into_py_dict(py)?;
+                if let Some(menage_caract_dict_py) = vec_menage_caract_dict.get(index) {
+                    let args = (&variables_dict_py, &params_dict_py, menage_caract_dict_py);
 
-                let args = (&variables_dict_py, &params_dict_py, &menage_carac_dict_py);
+                    let result = rustfunc.call(args, None);
 
-                let result = rustfunc.call(args, None);
-
-                match result {
-                    Ok(result) => {
-                        let output_py = result.extract()?;
-                        variables_dict_py.insert(self.name.to_owned(), output_py);
+                    match result {
+                        Ok(result) => {
+                            let output_py = result.extract()?;
+                            let variables_dict_menage = &mut vec_variables_dict[index];
+                            (*variables_dict_menage).insert(self.name.to_owned(), output_py);
+                        }
+                        Err(e) => return Err(e),
                     }
-                    Err(e) => println!(
-                        "Erreur lors du calcul de la composante {} ; {}",
-                        self.name,
-                        e.to_string()
-                    ),
                 };
-                Ok(())
             }
-    Ok(())}
+            Ok(())
+        });
+        Ok(output?)
+    }
 }
 
 #[derive(Deserialize, Debug, Clone)]
