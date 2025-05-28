@@ -5,7 +5,6 @@ use rayon::prelude::*;
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
 use std::ffi::CString;
-use std::sync::{Arc, Mutex};
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct Parameters {
