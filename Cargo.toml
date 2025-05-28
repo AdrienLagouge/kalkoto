@@ -1,11 +1,7 @@
 [workspace]
 
-members = [ "kalkoto-app",
-"kalkoto-cli",
-"kalkoto-lib",
-"kalkoto-app"
-]
-  
+members = ["kalkoto-app", "kalkoto-cli", "kalkoto-lib", "kalkoto-app"]
+
 resolver = "2"
 
 [profile]
@@ -19,5 +15,3 @@ inherits = "dev"
 
 [profile.android-dev]
 inherits = "dev"
-
-

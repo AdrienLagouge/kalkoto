@@ -1,7 +1,7 @@
-use crate::entities::menage::Menage;
-use crate::prelude::*;
-use pyo3::{prelude::*, types::IntoPyDict};
+use crate::{entities::menage::Menage, prelude::*};
+use pyo3::{prelude::*, types::IntoPyDict, types::PyDict};
 use pyo3_ffi::c_str;
+use rayon::prelude::*;
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
 use std::ffi::CString;
@@ -27,38 +27,55 @@ pub struct Composante {
 }
 
 impl Composante {
-    pub fn simulate_menage(
+    pub fn simulate_all_menages(
         &self,
-        menage: &Menage,
-        mut variables_dict: HashMap<String, f64>,
+        menages: &[Menage],
+        vec_variables_dict: &mut [HashMap<String, f64>],
         parameters_dict: &HashMap<String, f64>,
-    ) -> KalkotoResult<HashMap<String, f64>> {
+    ) -> KalkotoResult<()> {
         pyo3::prepare_freethreaded_python();
-        let mut output: f64;
-        output = Python::with_gil(|py| -> PyResult<f64> {
+
+        let output = Python::with_gil(|py| -> PyResult<()> {
             let composantemodule = PyModule::from_code(
                 py,
-                CString::new(self.function.0.clone())?.as_c_str(),
+                CString::new(self.function.0.to_owned())?.as_c_str(),
                 c_str!("composantemodule.py"),
                 c_str!("composantemodule"),
             )?;
 
-            let variables_dict_py = &variables_dict.clone().into_py_dict(py)?;
-            let params_dict_py = parameters_dict.into_py_dict(py)?;
-            let menage_carac_dict_py = menage.caracteristiques.clone().into_py_dict(py)?;
-
-            let args = (variables_dict_py, params_dict_py, menage_carac_dict_py);
-
             let rustfunc = composantemodule.getattr(&self.name)?;
-            let result = rustfunc.call(args, None)?;
-            let output_py = result.extract()?;
 
-            Ok(output_py)
-        })?;
+            let params_dict_py = parameters_dict.into_py_dict(py)?;
 
-        variables_dict.insert(self.name.to_owned(), output);
+            menages
+                .iter()
+                .enumerate()
+                .try_for_each(|(index, menage)| -> KalkotoResult<()> {
+                    let variables_dict_py = vec_variables_dict[index].clone().into_py_dict(py)?;
+                    let menage_carac_dict_py =
+                        menage.caracteristiques.to_owned().into_py_dict(py)?;
 
-        Ok(variables_dict)
+                    let args = (variables_dict_py, &params_dict_py, menage_carac_dict_py);
+
+                    let result = rustfunc.call(args, None);
+
+                    match result {
+                        Ok(result) => {
+                            let output_py = result.extract()?;
+                            vec_variables_dict[index].insert(self.name.to_owned(), output_py);
+                        }
+                        Err(e) => println!(
+                            "Erreur lors du calcul de la composante {} ; {}",
+                            self.name,
+                            e.to_string()
+                        ),
+                    };
+
+                    Ok(())
+                });
+            Ok(())
+        });
+        Ok(output?)
     }
 }
 
@@ -73,14 +90,20 @@ pub struct Policy {
 }
 
 impl Policy {
-    pub fn simulate_menage(&self, menage: &Menage) -> KalkotoResult<HashMap<String, f64>> {
-        let mut variables_dict = HashMap::<String, f64>::new();
+    pub fn simulate_all_menages(
+        &self,
+        menages: &[Menage],
+    ) -> KalkotoResult<Vec<HashMap<String, f64>>> {
+        let mut vec_variables_dict: Vec<HashMap<String, f64>> = vec![HashMap::new(); menages.len()];
 
-        for composante in self.composantes_ordonnees.iter() {
-            variables_dict =
-                composante.simulate_menage(menage, variables_dict, &self.parameters_values)?;
-        }
+        self.composantes_ordonnees.iter().for_each(|composante| {
+            composante.simulate_all_menages(
+                menages,
+                &mut vec_variables_dict,
+                &self.parameters_values,
+            );
+        });
 
-        Ok(variables_dict.clone())
+        Ok(vec_variables_dict)
     }
 }

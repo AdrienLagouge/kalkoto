@@ -61,20 +61,26 @@ impl Display for MenageInput {
 // les caractéristiques ont été vérifiées
 pub trait MenageListAdapter {
     fn create_valid_menage_input(
-        &self,
+        self,
         empty_menage_input: MenageInputBuilder<EmptyList>,
     ) -> KalkotoResult<MenageInput>;
 }
 
+//Marker trait pour définir les différents états possibles d'une liste ménages
+pub trait MenageList {}
+
 #[derive(Default, Debug, Clone)]
 pub struct EmptyList;
+impl MenageList for EmptyList {}
 #[derive(Debug, Clone)]
 pub struct Unvalid(Vec<Menage>);
+impl MenageList for Unvalid {}
 #[derive(Debug, Clone)]
 pub struct Valid(Vec<Menage>);
+impl MenageList for Valid {}
 
 #[derive(Debug, Clone, Default)]
-pub struct MenageInputBuilder<U> {
+pub struct MenageInputBuilder<U: MenageList> {
     set_caracteristiques: Option<HashSet<String>>,
     liste_menage: U,
 }
@@ -85,7 +91,7 @@ impl MenageInputBuilder<EmptyList> {
     }
 }
 
-impl<U> MenageInputBuilder<U> {
+impl<U> MenageInputBuilder<U> where U: MenageList{
     pub fn from_unvalidated_liste_menage(
         self,
         invalid_liste_menage: Vec<Menage>,
@@ -98,8 +104,8 @@ impl<U> MenageInputBuilder<U> {
 }
 
 impl MenageInputBuilder<Unvalid> {
-    pub fn validate_liste_menage(self) -> KalkotoResult<MenageInputBuilder<Valid>> {
-        let unvalidated_liste_menage = &self.liste_menage.0;
+    pub fn has_valid_liste_menage(&self) -> KalkotoResult<bool> { 
+    let unvalidated_liste_menage = &self.liste_menage.0;
 
         if unvalidated_liste_menage.is_empty() {
             return Err(From::from(MenageListAdapterError::ValidationError {
@@ -112,22 +118,27 @@ impl MenageInputBuilder<Unvalid> {
         let mut first_faulty_menage: Vec<_> = unvalidated_liste_menage
             .iter()
             .tuple_windows::<(&Menage, &Menage)>()
-            .filter(|pair| !(pair.0.compare_type_carac(pair.1).0))
-            .map(|pair| pair.0.clone())
+            .map(|pair| pair.0.compare_type_carac(pair.1))
+            .filter(|faulty_menages| !(faulty_menages.0))
             .take(1)
             .collect();
 
-        if let Some(menage) = first_faulty_menage.pop() {
+        if let Some(first_faulty_menage) = first_faulty_menage.pop() {
+            let carac_cause = format!("Les types ou les noms des caractéristiques de ces deux ménages ne correspondent pas. Problème à la caractéristique {0}",first_faulty_menage.2.clone());
             return Err(crate::errors::KalkotoError::ListMenageError(MenageListAdapterError::ValidationError {
-                fault_index: menage.index,
-                cause: "Les types ou les noms des caractéristiques de ces deux ménages ne correspondent pas"
-                    .to_owned(),
+                fault_index: first_faulty_menage.1,
+                cause:  carac_cause,
                 conseil: "Vérifier le fichier d'input".to_owned(),
             }));
         };
 
-        let validated_liste_menage = unvalidated_liste_menage.clone();
-        let validated_set_caracteristiques: HashSet<String> = validated_liste_menage[0]
+     Ok(true)
+    }
+
+    pub fn validate_liste_menage(self) -> KalkotoResult<MenageInputBuilder<Valid>> {
+        let valid_liste_menage = self.has_valid_liste_menage()?;
+
+        let validated_set_caracteristiques: HashSet<String> = self.liste_menage.0.first().unwrap()
             .caracteristiques
             .keys()
             .cloned()
@@ -135,7 +146,7 @@ impl MenageInputBuilder<Unvalid> {
 
         Ok(MenageInputBuilder {
             set_caracteristiques: Some(validated_set_caracteristiques),
-            liste_menage: Valid(validated_liste_menage),
+            liste_menage: Valid(self.liste_menage.0),
         })
     }
 }
@@ -145,8 +156,8 @@ impl MenageInputBuilder<Valid> {
         if let Some(set_caracteristiques) = self.set_caracteristiques {
             let liste_menage_valide = self.liste_menage.0;
             Ok(MenageInput {
-                set_caracteristiques_valide: set_caracteristiques.clone(),
-                liste_menage_valide: liste_menage_valide.clone(),
+                set_caracteristiques_valide: set_caracteristiques,
+                liste_menage_valide,
             })
         } else {
         Err(From::from(MenageListAdapterError::ValidationError { fault_index: -1 
@@ -238,7 +249,7 @@ mod tests {
 
 
         let wanted = MenageInput {
-            set_caracteristiques_valide: valide_caracteristiques.clone(),
+            set_caracteristiques_valide: valide_caracteristiques,
             liste_menage_valide: valide_menage_list.clone(),
         };
 
@@ -286,7 +297,7 @@ mod tests {
 
         let wanted = true;
         let mut result = MenageInputBuilder::<EmptyList>::new()
-            .from_unvalidated_liste_menage(invalid_menage_list.clone())
+            .from_unvalidated_liste_menage(invalid_menage_list)
             .validate_liste_menage()
             .is_err();
         assert_eq!(wanted, result);

@@ -1,4 +1,4 @@
-Monorepo de construction d'une suite logicielle permettant de réaliser des simulation statiques de politiques publiques.
+Monorepo de construction d'une suite logicielle permettant de réaliser des simulations statiques de politiques publiques.
  
 # TODO
 - écrire une libraire partagée **kalkoto-lib** permettant de construire une politique publique à partir d'un fichier TOML de définition du scénario envisagé et d'un fichier CSV contenant la liste des ménages auxquels appliquer le scénario
