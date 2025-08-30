@@ -1,5 +1,5 @@
 use crate::{entities::menage::Menage, prelude::*};
-use pyo3::{prelude::*, types::IntoPyDict, types::PyDict};
+use pyo3::{prelude::*, types::IntoPyDict, types::PyDict, types::PyList};
 use pyo3_ffi::c_str;
 use rayon::prelude::*;
 use serde::Deserialize;
@@ -27,15 +27,13 @@ pub struct Composante {
 }
 
 impl Composante {
-    pub fn simulate_all_menages(
+    pub fn simulate_all_menages<'a>(
         &self,
-        menages: &[Menage],
-        vec_variables_dict: &mut [HashMap<String, f64>],
-        parameters_dict: &HashMap<String, f64>,
-    ) -> KalkotoResult<()> {
-        pyo3::prepare_freethreaded_python();
-
-        let output = Python::with_gil(|py| -> PyResult<()> {
+        menages: &Bound<'a, PyList>,
+        vec_variables_dict: &mut Bound<'a, PyList>,
+        parameters_dict: &Bound<'a, PyDict>,
+    ) -> PyResult<()> {
+        Python::with_gil(|py| -> PyResult<()> {
             let composantemodule = PyModule::from_code(
                 py,
                 CString::new(self.function.0.to_owned())?.as_c_str(),
@@ -45,37 +43,30 @@ impl Composante {
 
             let rustfunc = composantemodule.getattr(&self.name)?;
 
-            let params_dict_py = parameters_dict.into_py_dict(py)?;
+            for index in 0..menages.len() {
+                let args = (
+                    &vec_variables_dict.get_item(index)?,
+                    parameters_dict,
+                    &menages.get_item(index)?,
+                );
 
-            menages
-                .iter()
-                .enumerate()
-                .try_for_each(|(index, menage)| -> KalkotoResult<()> {
-                    let variables_dict_py = vec_variables_dict[index].clone().into_py_dict(py)?;
-                    let menage_carac_dict_py =
-                        menage.caracteristiques.to_owned().into_py_dict(py)?;
+                let result = rustfunc.call(args, None);
 
-                    let args = (variables_dict_py, &params_dict_py, menage_carac_dict_py);
-
-                    let result = rustfunc.call(args, None);
-
-                    match result {
-                        Ok(result) => {
-                            let output_py = result.extract()?;
-                            vec_variables_dict[index].insert(self.name.to_owned(), output_py);
-                        }
-                        Err(e) => println!(
-                            "Erreur lors du calcul de la composante {} ; {}",
-                            self.name,
-                            e.to_string()
-                        ),
-                    };
-
-                    Ok(())
-                });
+                match result {
+                    Ok(result) => {
+                        vec_variables_dict
+                            .get_item(index)?
+                            .set_item(self.name.to_owned(), result)?;
+                    }
+                    Err(e) => println!(
+                        "Erreur lors du calcul de la composante {} ; {}",
+                        self.name,
+                        e.to_string()
+                    ),
+                };
+            }
             Ok(())
-        });
-        Ok(output?)
+        })
     }
 }
 
@@ -94,16 +85,49 @@ impl Policy {
         &self,
         menages: &[Menage],
     ) -> KalkotoResult<Vec<HashMap<String, f64>>> {
-        let mut vec_variables_dict: Vec<HashMap<String, f64>> = vec![HashMap::new(); menages.len()];
+        let mut empty_vec_variables_dict: HashMap<String, f64> =
+            HashMap::with_capacity(self.composantes_ordonnees.len());
 
-        self.composantes_ordonnees.iter().for_each(|composante| {
-            composante.simulate_all_menages(
-                menages,
-                &mut vec_variables_dict,
-                &self.parameters_values,
-            );
+        self.composantes_ordonnees.iter().map(|composante| {
+            empty_vec_variables_dict.insert(composante.name.to_owned(), 0 as f64);
         });
 
-        Ok(vec_variables_dict)
+        let mut vec_variables_dict: Vec<HashMap<String, f64>> =
+            vec![empty_vec_variables_dict; menages.len()];
+
+        pyo3::prepare_freethreaded_python();
+        let output = Python::with_gil(|py| -> PyResult<Vec<HashMap<String, f64>>> {
+            let params_dict_py = self.parameters_values.clone().into_py_dict(py)?;
+
+            let menages_dicts = PyList::new(
+                py,
+                &menages
+                    .iter()
+                    .map(|menage| menage.caracteristiques.clone().into_py_dict(py))
+                    .collect::<PyResult<Vec<_>>>()?,
+            )?;
+
+            let mut variables_dicts = PyList::new(
+                py,
+                vec_variables_dict
+                    .iter()
+                    .map(|dict| dict.clone().into_py_dict(py))
+                    .collect::<PyResult<Vec<_>>>()?,
+            )?;
+
+            self.composantes_ordonnees
+                .iter()
+                .map(|composante: &Composante| {
+                    composante.simulate_all_menages(
+                        &menages_dicts,
+                        &mut variables_dicts,
+                        &params_dict_py,
+                    )
+                })
+                .collect::<Vec<_>>();
+
+            Ok(variables_dicts.extract()?)
+        });
+        Ok(output?)
     }
 }
