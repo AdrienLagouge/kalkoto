@@ -1,14 +1,11 @@
 use crate::adapters::PolicyAdapterError;
-use crate::entities::menage::Caracteristique;
 use crate::{entities::menage::Menage, prelude::*};
-use crossterm::cursor::RestorePosition;
 use pyo3::{prelude::*, types::IntoPyDict, types::PyDict, types::PyList};
 use pyo3_ffi::c_str;
 use rayon::prelude::*;
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
 use std::ffi::CString;
-use std::sync::Mutex;
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct Parameters {
@@ -20,9 +17,9 @@ pub struct Parameters {
 #[derive(Deserialize, Debug, Clone)]
 pub struct Function(String);
 
-impl From<Function> for String {
-    fn from(value: Function) -> Self {
-        value.0
+impl Into<String> for Function {
+    fn into(self) -> String {
+        self.0
     }
 }
 
@@ -37,42 +34,46 @@ pub struct Composante {
 }
 
 impl Composante {
-    pub fn simulate_all_menages<'py>(
+    pub fn simulate_all_menages<'a>(
         &self,
-        py: Python<'py>,
-        py_menages_caract_dict: &Vec<Bound<'py, PyDict>>,
-        py_menages_variables_dict: &mut Vec<Bound<'py, PyDict>>,
-        parameters_dict: &Bound<'py, PyDict>,
-        python_functions_module: &Bound<'py, PyModule>,
-    ) -> KalkotoResult<()> {
-        let rustfunc = python_functions_module.getattr(&self.name)?;
+        menages: &Bound<'a, PyList>,
+        vec_variables_dict: &mut Bound<'a, PyList>,
+        parameters_dict: &Bound<'a, PyDict>,
+        python_functions: &String,
+    ) -> PyResult<()> {
+        Python::with_gil(|py| -> PyResult<()> {
+            let composantemodule = PyModule::from_code(
+                py,
+                CString::new(python_functions.to_owned())?.as_c_str(),
+                c_str!("composantemodule.py"),
+                c_str!("composantemodule"),
+            )?;
 
-        py_menages_caract_dict
-            .iter()
-            .zip(py_menages_variables_dict.iter())
-            .try_for_each(|(py_menage_caract_dict, py_menage_variables_dict)| {
+            let rustfunc = composantemodule.getattr(&self.name)?;
+
+            for index in 0..menages.len() {
                 let args = (
-                    py_menage_variables_dict,
-                    &parameters_dict,
-                    py_menage_caract_dict,
+                    &vec_variables_dict.get_item(index)?,
+                    parameters_dict,
+                    &menages.get_item(index)?,
                 );
 
                 let result = rustfunc.call(args, None);
 
                 match result {
                     Ok(result) => {
-                        (*py_menage_variables_dict).set_item(self.name.to_owned(), result);
-                        Ok(())
+                        vec_variables_dict
+                            .get_item(index)?
+                            .set_item(self.name.to_owned(), result)?;
                     }
-                    Err(e) => Err(KalkotoError::SimError(
-                        super::simulator::SimulationError::PythonError(format!(
-                            "Erreur lors du calcul de la composante {}",
-                            self.name
-                        )),
-                    )),
-                }
-            });
-        Ok(())
+                    Err(e) => println!(
+                        "Erreur lors du calcul de la composante {} ; {}",
+                        self.name, e
+                    ),
+                };
+            }
+            Ok(())
+        })
     }
 }
 
@@ -124,49 +125,41 @@ impl Policy {
             let mut vec_variables_dict: Vec<HashMap<String, f64>> =
                 vec![empty_vec_variables_dict; menages.len()];
 
-            Python::initialize();
+            pyo3::prepare_freethreaded_python();
 
-            let output = Python::attach(|py| -> PyResult<Vec<HashMap<String, f64>>> {
-                let composantemodule = PyModule::from_code(
-                    py,
-                    CString::new(python_functions.to_owned())?.as_c_str(),
-                    c_str!("composantemodule.py"),
-                    c_str!("composantemodule"),
-                )?;
-
+            let output = Python::with_gil(|py| -> PyResult<Vec<HashMap<String, f64>>> {
                 let params_dict_py = self.parameters_values.clone().into_py_dict(py)?;
 
-                let py_menages_dicts = menages
-                    .iter()
-                    .map(|menage| menage.caracteristiques.clone().into_py_dict(py))
-                    .collect::<PyResult<Vec<_>>>()?;
+                let menages_dicts = PyList::new(
+                    py,
+                    &menages
+                        .iter()
+                        .map(|menage| menage.caracteristiques.clone().into_py_dict(py))
+                        .collect::<PyResult<Vec<_>>>()?,
+                )?;
 
-                let mut py_variables_dicts = vec_variables_dict
-                    .iter()
-                    .map(|dict| dict.clone().into_py_dict(py))
-                    .collect::<PyResult<Vec<_>>>()?;
+                let mut variables_dicts = PyList::new(
+                    py,
+                    vec_variables_dict
+                        .iter()
+                        .map(|dict| dict.clone().into_py_dict(py))
+                        .collect::<PyResult<Vec<_>>>()?,
+                )?;
 
                 self.composantes_ordonnees
                     .iter()
                     .map(|composante: &Composante| {
                         composante.simulate_all_menages(
-                            py,
-                            &py_menages_dicts,
-                            &mut py_variables_dicts,
+                            &menages_dicts,
+                            &mut variables_dicts,
                             &params_dict_py,
-                            &composantemodule,
+                            python_functions,
                         )
                     })
                     .collect::<Vec<_>>();
 
-                let final_results_variables_dict = py_variables_dicts
-                    .into_iter()
-                    .map(|result_wrapper| result_wrapper.extract::<HashMap<String, f64>>())
-                    .collect::<Result<Vec<HashMap<String, f64>>, _>>()?;
-
-                Ok(final_results_variables_dict)
+                Ok(variables_dicts.extract()?)
             });
-
             Ok(output?)
         } else {
             Err(KalkotoError::PolicyError(PolicyAdapterError::Generic(
