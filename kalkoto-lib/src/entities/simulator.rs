@@ -19,6 +19,9 @@ pub enum SimulationError {
 
     #[error("Erreur à l'ouverture du fichier csv d'output")]
     IOError(#[from] std::io::Error),
+
+    #[error("Erreur lors de l'exécution du code Python")]
+    PythonError(String),
 }
 
 impl From<String> for SimulationError {
