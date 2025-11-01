@@ -106,7 +106,10 @@ impl<P: AsRef<Path>> PolicyAdapter for TomlInputAdapter<P> {
             parameters_intitules: policy_parameters_intitules.clone(),
             parameters_values: policy_parameters_values.clone(),
             caracteristiques_menages: policy_caracteristiques.clone(),
+            python_functions: None,
         };
+
+        let policy = policy.populate_python_functions()?;
 
         Ok(PolicyInput {
             valid_policy: policy,
