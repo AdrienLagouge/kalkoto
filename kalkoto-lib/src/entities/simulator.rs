@@ -13,23 +13,18 @@ use std::{
 #[derive(thiserror::Error, Debug)]
 pub enum SimulationError {
     #[error("Erreur à la mise en cohérence ménages/policy : {0}")]
-    PolicyError(String),
+    MenagesPolicyMismatchError(String),
+    
+    #[error("Problème lors de l'exécution d'une fonction Python :\n\t\t -> {err_msg}\n\t\t -> {source}")]
+    PythonError {
+        source: pyo3::prelude::PyErr,
+        err_msg: String
+        },
 
-    #[error("Erreur à l'écriture du fichier csv d'output")]
-    CsvError(#[from] csv::Error),
-
-    #[error("Erreur à l'ouverture du fichier csv d'output")]
-    IOError(#[from] std::io::Error),
-
-    #[error("Erreur lors de l'exécution du code Python")]
-    PythonError(String),
+    #[error("Résultats non valides : {0}")]
+    ResultsError(String),
 }
 
-impl From<String> for SimulationError {
-    fn from(value: String) -> Self {
-        SimulationError::PolicyError(value)
-    }
-}
 
 #[derive(Default)]
 pub struct EmptyMenageInput;
@@ -53,7 +48,7 @@ pub struct SimulatorBuilder<M, B, V> {
     pub policy_variante: V,
     pub results_baseline: Option<Vec<HashMap<String, f64>>>,
     pub results_variante: Option<Vec<HashMap<String, f64>>>,
-    pub results_diff: Option<Vec<HashMap<String, f64>>>,
+    pub results_diff: Option<Vec<HashMap<String, Option<f64>>>>,
 }
 
 
@@ -109,7 +104,7 @@ impl SimulatorBuilder<ValidMenageInput, EmptyBaselineInput, EmptyVarianteInput> 
             }),
             _ => {
                 let error_msg = format!("Les caractéristiques dont dépend la politique baseline sont plus larges que celles présentes dans le fichier ménages.\nMauvaises caractéristiques : {:?}",diff_caracteristiques);
-                Err(KalkotoError::SimError(SimulationError::from(error_msg)))
+                Err(KalkotoError::SimError(SimulationError::MenagesPolicyMismatchError(error_msg)))
             }
         }
     }
@@ -163,7 +158,7 @@ impl SimulatorBuilder<ValidMenageInput, ValidBaselineInput, EmptyVarianteInput> 
                 results_variante: self.results_variante,
                 results_diff: self.results_diff            
             }),
-            _ => Err(SimulationError::from("Les caractéristiques dont dépend la politique variante sont plus larges que celles présentes dans le fichier ménages".to_string()).into()),
+            _ => Err(KalkotoError::SimError(SimulationError::MenagesPolicyMismatchError("Les caractéristiques dont dépend la politique variante sont plus larges que celles présentes dans le fichier ménages".to_string()))),
         }
     }
 }
@@ -181,20 +176,20 @@ impl SimulatorBuilder<ValidMenageInput, ValidBaselineInput, ValidVarianteInput> 
         for (baseline_result, variante_result) in self
             .results_baseline
             .take()
-            .ok_or(SimulationError::from(
+            .ok_or(SimulationError::ResultsError(
                 "Baseline pas encore calculée !".to_string(),
             ))?
             .iter()
             .zip(results.iter())
         {
-            let mut diff_map = HashMap::<String, f64>::new();
+            let mut diff_map = HashMap::<String, Option<f64>>::new();
 
-            for (name, baseline_value) in baseline_result {
-                let var_value = *variante_result.get(name).ok_or(SimulationError::from(
-                    "Variante non encore calculée".to_string(),
-                ))?;
-                let diff = var_value - baseline_value;
-                diff_map.insert(name.to_owned(), diff);
+            for (variante_composante_name, variante_composante_value) in variante_result {
+                let baseline_composante_value = baseline_result.get(variante_composante_name);
+                let diff = baseline_composante_value.map( 
+                    |baseline_value| variante_composante_value - baseline_value)
+                    ;
+                diff_map.insert(variante_composante_name.to_owned(), diff);
             }
             diff_results.push(diff_map);
         }

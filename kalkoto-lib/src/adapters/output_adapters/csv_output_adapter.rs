@@ -1,11 +1,11 @@
 use crate::{
-    adapters::output_adapters::OutputAdapter,
+    adapters::output_adapters::{OutputAdapter, OutputAdapterError},
     entities::simulator::{
         SimulationError, SimulatorBuilder, ValidBaselineInput, ValidMenageInput, ValidVarianteInput,
     },
     KalkotoError, KalkotoResult,
 };
-use csv::WriterBuilder;
+use csv::{Result, WriterBuilder};
 
 #[derive(Default)]
 pub struct CSVOutputAdapter {
@@ -38,7 +38,7 @@ impl OutputAdapter for CSVOutputAdapter {
             let mut wtr = WriterBuilder::new()
                 .delimiter(b';')
                 .from_path(output_path)
-                .map_err(SimulationError::from)?;
+                .map_err(OutputAdapterError::from)?;
 
             let mut headers = simulated
                 .policy_baseline
@@ -62,8 +62,8 @@ impl OutputAdapter for CSVOutputAdapter {
                         results_menage
                             .get(name)
                             .ok_or_else(|| {
-                                SimulationError::from(
-                                    format!("Problème de cohérence des composantes lors de l'export. Erreur : {}",name)
+                                SimulationError::ResultsError(
+                                    format!("Problème de cohérence des composantes lors de l'export. Erreur à la composante : {}",name)
                                 )
                             })?
                             .to_string(),
@@ -73,11 +73,11 @@ impl OutputAdapter for CSVOutputAdapter {
                 wtr.write_record(&vec_results_menage);
             }
 
-            wtr.flush().map_err(SimulationError::from)?;
+            wtr.flush().map_err(OutputAdapterError::from)?;
             return Ok(());
         }
 
-        Err(KalkotoError::SimError(SimulationError::from(
+        Err(KalkotoError::SimError(SimulationError::ResultsError(
             "Pas possible d'exporter : les résultats n'ont pas encore été calculés".to_string(),
         )))
     }
@@ -103,12 +103,12 @@ impl OutputAdapter for CSVOutputAdapter {
             let mut wtr_var = WriterBuilder::new()
                 .delimiter(b';')
                 .from_path(output_path_var)
-                .map_err(SimulationError::from)?;
+                .map_err(OutputAdapterError::from)?;
 
             let mut wtr_diff = WriterBuilder::new()
                 .delimiter(b';')
                 .from_path(output_path_diff)
-                .map_err(SimulationError::from)?;
+                .map_err(OutputAdapterError::from)?;
 
             let mut headers = simulated
                 .policy_variante
@@ -132,37 +132,44 @@ impl OutputAdapter for CSVOutputAdapter {
                 let mut vec_results_menage_variante = vec![];
                 let mut vec_results_menage_diff = vec![];
                 for name in headers.iter() {
-                    vec_results_menage_variante.push(
-                        results_menage_variante
-                            .get(name)
-                            .ok_or(SimulationError::from(
-                                "Problème de cohérence des composantes lors de l'export"
-                                    .to_string(),
-                            ))?
-                            .to_string(),
-                    );
-                    vec_results_menage_diff.push(
-                        results_menage_diff
-                            .get(name)
-                            .ok_or(SimulationError::from(
-                                "Problème de cohérence des composantes lors de l'export"
-                                    .to_string(),
-                            ))?
-                            .to_string(),
-                    );
+                    let out_variante_result = results_menage_variante
+                        .get(name)
+                        .ok_or(SimulationError::ResultsError(format!(
+                            "Problème de cohérence des composantes lors de l'export. Erreur à la composante : {}",
+                            name
+                        )))?
+                        .to_string();
+
+                    vec_results_menage_variante.push(out_variante_result);
+
+                    let out_diff_result = results_menage_diff
+                        .get(name)
+                        .ok_or_else(|| {
+                            SimulationError::ResultsError(format!(
+                            "Problème de cohérence des composantes lors de l'export. Erreur à la composante : {}",
+                            name
+                        ))
+                        })?
+                        .as_ref()
+                        .map(|result| result.to_string())
+                        .unwrap_or_default();
+
+                    vec_results_menage_diff.push(out_diff_result)
                 }
+
                 vec_results_menage_variante.insert(0, (index + 1).to_string());
                 vec_results_menage_diff.insert(0, (index + 1).to_string());
+
                 wtr_var.write_record(&vec_results_menage_variante);
                 wtr_diff.write_record(&vec_results_menage_diff);
             }
 
-            wtr_var.flush().map_err(SimulationError::from)?;
-            wtr_diff.flush().map_err(SimulationError::from)?;
+            wtr_var.flush().map_err(OutputAdapterError::from)?;
+            wtr_diff.flush().map_err(OutputAdapterError::from)?;
             return Ok(());
         }
 
-        Err(KalkotoError::SimError(SimulationError::from(
+        Err(KalkotoError::SimError(SimulationError::ResultsError(
             "Pas possible d'exporter : les résultats n'ont pas encore été calculés".to_string(),
         )))
     }

@@ -11,9 +11,6 @@ pub enum KalkotoError {
     #[error("Problème lors de la simulation")]
     SimError(#[from] crate::entities::simulator::SimulationError),
 
-    #[error("Problème lors de l'exécution d'une fonction Python")]
-    PythonError(#[from] pyo3::prelude::PyErr),
-
-    #[error("Problème de synchronisation lors du calcul des résultats")]
-    SyncError,
+    #[error("Problème à l'export des résultats")]
+    ExportError(#[from] crate::adapters::output_adapters::OutputAdapterError),
 }

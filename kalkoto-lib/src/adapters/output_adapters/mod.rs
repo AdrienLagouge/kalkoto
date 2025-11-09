@@ -18,3 +18,12 @@ pub trait OutputAdapter {
 }
 
 pub mod csv_output_adapter;
+
+#[derive(thiserror::Error, Debug)]
+pub enum OutputAdapterError {
+    #[error("Erreur à l'ouverture du fichier")]
+    IO(#[from] std::io::Error),
+
+    #[error("Erreur à l'écriture du fichier CSV")]
+    CSVError(#[from] csv::Error),
+}
