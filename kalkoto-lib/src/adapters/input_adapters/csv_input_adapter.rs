@@ -1,15 +1,15 @@
 use crate::adapters::{MenageListAdapter, MenageListAdapterError};
 use crate::entities::menage::{Caracteristique, Menage};
+use crate::entities::menage_input::{MenageInput, MenageInputBuilder};
+use crate::{KalkotoError, KalkotoResult};
 use csv::{Reader, ReaderBuilder, StringRecord};
-use std::collections::{HashMap, HashSet};
-use std::error::Error;
 use std::{
+    collections::{HashMap, HashSet},
+    error::Error,
     fs::{write, File},
     io::{self, Read},
     path::Path,
 };
-
-use super::{KalkotoError, KalkotoResult};
 
 impl From<csv::Error> for MenageListAdapterError {
     fn from(e: csv::Error) -> MenageListAdapterError {
@@ -119,8 +119,8 @@ impl CsvInputAdapter {
 impl MenageListAdapter for CsvInputAdapter {
     fn create_valid_menage_input(
         self,
-        empty_menage_input: super::MenageInputBuilder<super::EmptyList>,
-    ) -> KalkotoResult<super::MenageInput> {
+        empty_menage_input: MenageInputBuilder<super::EmptyList>,
+    ) -> KalkotoResult<MenageInput> {
         match (self.set_caracteristiques, self.liste_menages) {
             (Some(set_caracteristiques), Some(liste_menages)) => empty_menage_input
                 .from_unvalidated_liste_menage(liste_menages)

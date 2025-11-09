@@ -1,15 +1,15 @@
-use crate::adapters::{PolicyAdapter, PolicyAdapterError, PolicyInput};
+use crate::adapters::{PolicyAdapter, PolicyAdapterError};
 use crate::entities::policy::{Composante, Parameters, Policy};
+use crate::entities::policy_input::PolicyInput;
+use crate::KalkotoResult;
 use std::collections::{HashMap, HashSet};
-use std::error::Error;
 use std::{
+    error::Error,
     fs::{write, File},
     io::{self, Read},
     path::Path,
 };
 use toml::Table;
-
-use super::{KalkotoError, KalkotoResult};
 
 pub struct TomlInputAdapter<P: AsRef<Path>> {
     file_path: P,

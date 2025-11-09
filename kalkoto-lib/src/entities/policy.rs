@@ -1,14 +1,16 @@
-use crate::adapters::PolicyAdapterError;
-use crate::entities::menage::Caracteristique;
-use crate::{entities::menage::Menage, prelude::*};
+use crate::adapters::input_adapters::PolicyAdapterError;
+use crate::entities::menage::{Caracteristique, Menage};
+use crate::{KalkotoError, KalkotoResult};
 use crossterm::cursor::RestorePosition;
 use pyo3::{prelude::*, types::IntoPyDict, types::PyDict, types::PyList};
 use pyo3_ffi::c_str;
 use rayon::prelude::*;
 use serde::Deserialize;
-use std::collections::{HashMap, HashSet};
-use std::ffi::CString;
-use std::sync::Mutex;
+use std::{
+    collections::{HashMap, HashSet},
+    ffi::CString,
+    sync::Mutex,
+};
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct Parameters {

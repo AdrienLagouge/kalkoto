@@ -1,8 +1,8 @@
 use anyhow::Result;
 use clap::Parser;
 use crossterm::style::Stylize;
-use kalkoto_lib::adapters::csv_input_adapter::*;
-use kalkoto_lib::adapters::*;
+use kalkoto_lib::adapters::input_adapters::*;
+use kalkoto_lib::adapters::output_adapters::csv_output_adapter::CSVOutputAdapter;
 use kalkoto_lib::entities::simulator::{
     EmptyBaselineInput, EmptyMenageInput, EmptyVarianteInput, SimulatorBuilder,
 };
@@ -25,14 +25,16 @@ struct Args {
 }
 
 fn main() -> Result<()> {
-    let mut sim_builder =
-        SimulatorBuilder::<EmptyMenageInput, EmptyBaselineInput, EmptyVarianteInput>::new();
-
     let args = Args::parse();
 
+    let mut csv_writer = CSVOutputAdapter::new();
+
     if let Some(prefix) = args.prefix.as_deref() {
-        sim_builder = sim_builder.add_output_prefix(prefix.to_string())
+        csv_writer = csv_writer.add_output_prefix(prefix.to_string())
     }
+
+    let sim_builder =
+        SimulatorBuilder::<EmptyMenageInput, EmptyBaselineInput, EmptyVarianteInput>::new();
 
     println!(
         "{}",
@@ -42,7 +44,7 @@ fn main() -> Result<()> {
             .underlined()
     );
 
-    let mut csv_input_adapter = CsvInputAdapter::new();
+    let mut csv_input_adapter = csv_input_adapter::CsvInputAdapter::new();
     let mut csv_content = String::new();
     csv_input_adapter =
         csv_input_adapter.populate_from_path(&args.menage_input, &mut csv_content)?;
@@ -74,7 +76,7 @@ fn main() -> Result<()> {
             .bold()
     );
 
-    sim_builder.export_baseline_results_csv()?;
+    sim_builder.export_baseline(&csv_writer)?;
 
     if let Some(variante_input) = args.variante_policy_input {
         println!(
@@ -84,6 +86,7 @@ fn main() -> Result<()> {
                 .bold()
                 .underlined()
         );
+
         let toml_input_adapter_variante = TomlInputAdapter::new(&variante_input);
 
         let mut sim_builder =
@@ -100,7 +103,7 @@ fn main() -> Result<()> {
                 .bold()
         );
 
-        sim_builder.export_variante_results_csv()?;
+        sim_builder.export_variante(&csv_writer)?;
     }
 
     Ok(())
