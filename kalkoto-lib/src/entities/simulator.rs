@@ -79,7 +79,7 @@ impl SimulatorBuilder<EmptyMenageInput, EmptyBaselineInput, EmptyVarianteInput> 
 impl SimulatorBuilder<ValidMenageInput, EmptyBaselineInput, EmptyVarianteInput> {
     pub fn add_valid_baseline_policy<P: PolicyAdapter>(
         self,
-        baseline_policy_adapter: &P,
+        baseline_policy_adapter: P,
     ) -> KalkotoResult<SimulatorBuilder<ValidMenageInput, ValidBaselineInput, EmptyVarianteInput>>
     {
         let baseline_policy_input = baseline_policy_adapter.create_valid_policy_input()?;
@@ -134,7 +134,7 @@ impl<E> SimulatorBuilder<ValidMenageInput, ValidBaselineInput, E> {
 impl SimulatorBuilder<ValidMenageInput, ValidBaselineInput, EmptyVarianteInput> {
     pub fn add_valid_variante_policy<P: PolicyAdapter>(
         mut self,
-        variante_policy_adapter: &P,
+        variante_policy_adapter: P,
     ) -> KalkotoResult<SimulatorBuilder<ValidMenageInput, ValidBaselineInput, ValidVarianteInput>>
     {
         let variante_policy_input = variante_policy_adapter.create_valid_policy_input()?;

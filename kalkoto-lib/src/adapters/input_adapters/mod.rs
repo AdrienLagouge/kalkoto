@@ -48,10 +48,19 @@ pub enum PolicyAdapterError {
     IO(#[from] std::io::Error),
 
     #[error("Erreur à la lecture du fichier TOML")]
-    DeserializeError(#[from] toml::de::Error),
+    UTF8(#[from] std::str::Utf8Error),
+
+    #[error("Erreur au parsing du fichier TOML")]
+    Deserialize(#[from] toml::ser::Error),
+
+    #[error("Erreur à l'interprétation du fichier TOML")]
+    Interpret(#[from] toml::de::Error),
 
     #[error("Champ(s) manquant(s) ou invalide(s): {0}")]
     Generic(String),
+
+    #[error("Problème à la création de l'input modélisé")]
+    Trait,
 }
 
 impl From<String> for PolicyAdapterError {
@@ -62,7 +71,7 @@ impl From<String> for PolicyAdapterError {
 
 // Trait commun à tous les adapteurs de création d'une politique publique correctement initialisée
 pub trait PolicyAdapter {
-    fn create_valid_policy_input(&self) -> KalkotoResult<PolicyInput>;
+    fn create_valid_policy_input(self) -> KalkotoResult<PolicyInput>;
 }
 
 #[cfg(test)]

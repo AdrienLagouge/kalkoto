@@ -1,7 +1,8 @@
 use crate::adapters::{PolicyAdapter, PolicyAdapterError};
 use crate::entities::policy::{Composante, Parameters, Policy};
 use crate::entities::policy_input::PolicyInput;
-use crate::KalkotoResult;
+use crate::{KalkotoError, KalkotoResult};
+use rayon::slice::ParallelSlice;
 use std::collections::{HashMap, HashSet};
 use std::{
     error::Error,
@@ -11,109 +12,161 @@ use std::{
 };
 use toml::Table;
 
-pub struct TomlInputAdapter<P: AsRef<Path>> {
-    file_path: P,
+#[derive(Debug, Default)]
+pub struct TomlInputAdapter {
+    policy_name: Option<String>,
+    policy_intitule: Option<String>,
+    policy_composantes: Option<Vec<Composante>>,
 }
 
-impl<P: AsRef<Path>> TomlInputAdapter<P> {
-    pub fn new(path: P) -> Self {
-        Self { file_path: path }
+impl TomlInputAdapter {
+    pub fn new() -> Self {
+        Self::default()
     }
 
-    pub fn populate_from_path(&self) -> KalkotoResult<(String, String, Vec<Composante>)> {
-        let mut file_content = match std::fs::read_to_string(&self.file_path) {
-            Ok(file_content) => file_content,
+    pub fn populate_from_buf(self, buf: &[u8]) -> KalkotoResult<(String, String, Vec<Composante>)> {
+        let s = std::str::from_utf8(buf).map_err(PolicyAdapterError::from)?;
+
+        let policy_table: Table = match s.parse::<Table>() {
+            Ok(policy_table) => policy_table,
+            Err(e) => return Err(From::from(PolicyAdapterError::Interpret(e))),
+        };
+
+        let clefs_autorisees: HashSet<_> = ["name", "intitule_long", "composante"]
+            .iter()
+            .cloned()
+            .collect();
+
+        let toutes_autorisees = policy_table
+            .keys()
+            .all(|k| clefs_autorisees.contains(&k.as_str()));
+        let no_missing = clefs_autorisees.len() == policy_table.len();
+
+        let valid_keys = toutes_autorisees && no_missing;
+
+        match valid_keys {
+            true => {
+                let policy_name: String = policy_table
+                    .get("name")
+                    .ok_or(PolicyAdapterError::from(
+                        "Le champ name est manquant !".to_string(),
+                    ))?
+                    .clone()
+                    .try_into()
+                    .map_err(PolicyAdapterError::from)?;
+
+                let policy_intitule: String = policy_table
+                    .get("intitule_long")
+                    .ok_or(PolicyAdapterError::from(
+                        "Le champ intitule_long est manquant !".to_string(),
+                    ))?
+                    .clone()
+                    .try_into()
+                    .map_err(PolicyAdapterError::from)?;
+
+                let policy_composantes: Vec<Composante> = policy_table
+                    .get("composante")
+                    .ok_or(PolicyAdapterError::from(
+                        "Le champ composante est manquant !".to_string(),
+                    ))?
+                    .clone()
+                    .try_into()
+                    .map_err(PolicyAdapterError::from)?;
+
+                Ok((policy_name, policy_intitule, policy_composantes))
+            }
+            false => Err(From::from(PolicyAdapterError::Generic(
+                "Le fichier d'input ne contient pas les clefs nécessaires".into(),
+            ))),
+        }
+    }
+
+    pub fn populate_from_path<P>(self, path: P, buf_string: &mut String) -> KalkotoResult<Self>
+    where
+        P: AsRef<Path>,
+    {
+        let mut f = match File::open(path) {
+            Ok(file) => file,
             Err(e) => return Err(From::from(PolicyAdapterError::IO(e))),
         };
 
-        let policy_table: Table = match file_content.parse::<Table>() {
-            Ok(policy_table) => policy_table,
-            Err(e) => return Err(From::from(PolicyAdapterError::DeserializeError(e))),
+        // read the whole file
+        let _ = match f.read_to_string(buf_string) {
+            Ok(nbytes) => nbytes,
+            Err(e) => return Err(From::from(PolicyAdapterError::IO(e))),
         };
 
-        let policy_name: String = policy_table
-            .get("name")
-            .ok_or(PolicyAdapterError::from(
-                "Le champ name est manquant !".to_string(),
-            ))?
-            .clone()
-            .try_into()
-            .map_err(PolicyAdapterError::from)?;
+        let input_slice = buf_string.as_bytes();
 
-        let policy_intitule: String = policy_table
-            .get("intitule_long")
-            .ok_or(PolicyAdapterError::from(
-                "Le champ intitule_long est manquant !".to_string(),
-            ))?
-            .clone()
-            .try_into()
-            .map_err(PolicyAdapterError::from)?;
+        let (policy_name, policy_intitule, policy_composantes) =
+            self.populate_from_buf(input_slice)?;
 
-        let policy_composantes: Vec<Composante> = policy_table
-            .get("composante")
-            .ok_or(PolicyAdapterError::from(
-                "Le champ composante est manquant !".to_string(),
-            ))?
-            .clone()
-            .try_into()
-            .map_err(PolicyAdapterError::from)?;
-
-        Ok((policy_name, policy_intitule, policy_composantes))
+        Ok(Self {
+            policy_name: Some(policy_name),
+            policy_intitule: Some(policy_intitule),
+            policy_composantes: Some(policy_composantes),
+        })
     }
 }
 
-impl<P: AsRef<Path>> PolicyAdapter for TomlInputAdapter<P> {
-    fn create_valid_policy_input(&self) -> KalkotoResult<PolicyInput> {
-        let (name, intitule_long, mut composantes) = self.populate_from_path()?;
+impl PolicyAdapter for TomlInputAdapter {
+    fn create_valid_policy_input(self) -> KalkotoResult<PolicyInput> {
+        if let (Some(name), Some(intitule_long), Some(mut composantes)) = (
+            self.policy_name,
+            self.policy_intitule,
+            self.policy_composantes,
+        ) {
+            composantes.sort_by_key(|c| c.logical_order);
 
-        composantes.sort_by_key(|c| c.logical_order);
+            let mut policy_parameters_intitules = HashMap::new();
+            let mut policy_parameters_values = HashMap::new();
+            let mut policy_caracteristiques = HashSet::new();
 
-        let mut policy_parameters_intitules = HashMap::new();
-        let mut policy_parameters_values = HashMap::new();
-        let mut policy_caracteristiques = HashSet::new();
+            for composante in composantes.iter() {
+                let temp_dict_names: HashMap<String, String> = composante
+                    .parameters
+                    .names
+                    .iter()
+                    .zip(composante.parameters.intitules_long.iter())
+                    .map(|(name, intitule)| (name.clone(), intitule.clone()))
+                    .collect();
+                policy_parameters_intitules.extend(temp_dict_names);
 
-        for composante in composantes.iter() {
-            let temp_dict_names: HashMap<String, String> = composante
-                .parameters
-                .names
-                .iter()
-                .zip(composante.parameters.intitules_long.iter())
-                .map(|(name, intitule)| (name.clone(), intitule.clone()))
-                .collect();
-            policy_parameters_intitules.extend(temp_dict_names);
+                let temp_dict_values: HashMap<String, f64> = composante
+                    .parameters
+                    .names
+                    .iter()
+                    .zip(composante.parameters.values.iter())
+                    .map(|(name, intitule)| (name.clone(), *intitule))
+                    .collect();
+                policy_parameters_values.extend(temp_dict_values);
 
-            let temp_dict_values: HashMap<String, f64> = composante
-                .parameters
-                .names
-                .iter()
-                .zip(composante.parameters.values.iter())
-                .map(|(name, intitule)| (name.clone(), *intitule))
-                .collect();
-            policy_parameters_values.extend(temp_dict_values);
+                let temp_set: HashSet<String> = composante
+                    .caracteristiques_dependencies
+                    .iter()
+                    .cloned()
+                    .collect();
+                policy_caracteristiques.extend(temp_set);
+            }
 
-            let temp_set: HashSet<String> = composante
-                .caracteristiques_dependencies
-                .iter()
-                .cloned()
-                .collect();
-            policy_caracteristiques.extend(temp_set);
+            let policy = Policy {
+                name,
+                intitule_long,
+                composantes_ordonnees: composantes,
+                parameters_intitules: policy_parameters_intitules.clone(),
+                parameters_values: policy_parameters_values.clone(),
+                caracteristiques_menages: policy_caracteristiques.clone(),
+                python_functions: None,
+            };
+
+            let policy = policy.populate_python_functions()?;
+
+            Ok(PolicyInput {
+                valid_policy: policy,
+            })
+        } else {
+            Err(From::from(PolicyAdapterError::Trait))
         }
-
-        let policy = Policy {
-            name,
-            intitule_long,
-            composantes_ordonnees: composantes,
-            parameters_intitules: policy_parameters_intitules.clone(),
-            parameters_values: policy_parameters_values.clone(),
-            caracteristiques_menages: policy_caracteristiques.clone(),
-            python_functions: None,
-        };
-
-        let policy = policy.populate_python_functions()?;
-
-        Ok(PolicyInput {
-            valid_policy: policy,
-        })
     }
 }
 
@@ -154,11 +207,15 @@ def plan_notif(Variables, ParamsDict, MenageCarac):
         let mut tmp_file = File::create(&file_path).map_err(PolicyAdapterError::IO)?;
         fs::write(&file_path, UNVALID_TOML_BYTES).map_err(PolicyAdapterError::IO)?;
 
-        let toml_adapter = TomlInputAdapter::new(file_path);
+        let toml_adapter = TomlInputAdapter::new();
+
+        let mut empty_buf = String::new();
+
+        let toml_adapter = toml_adapter.populate_from_path(file_path, &mut empty_buf);
 
         let wanted = true;
 
-        let result = toml_adapter.create_valid_policy_input().is_err();
+        let result = toml_adapter.is_err();
         assert_eq!(wanted, result);
 
         drop(tmp_file);
@@ -170,6 +227,8 @@ def plan_notif(Variables, ParamsDict, MenageCarac):
     #[test]
     fn unvalid_toml_file_missing_composante_populate() -> KalkotoResult<()> {
         static UNVALID_TOML_BYTES: &[u8] = r#"
+name = "APA domicile"
+
 intitule_long = "Aide personnalisée à domicile"
 
 [[komposante]]
@@ -198,11 +257,16 @@ def plan_notif(Variables, ParamsDict, MenageCarac):
         let mut tmp_file = File::create(&file_path).map_err(PolicyAdapterError::IO)?;
         fs::write(&file_path, UNVALID_TOML_BYTES).map_err(PolicyAdapterError::IO)?;
 
-        let toml_adapter = TomlInputAdapter::new(file_path);
+        let toml_adapter = TomlInputAdapter::new();
+
+        let mut empty_buf = String::new();
+
+        let toml_adapter = toml_adapter.populate_from_path(file_path, &mut empty_buf);
 
         let wanted = true;
 
-        let result = toml_adapter.create_valid_policy_input().is_err();
+        let result = toml_adapter.is_err();
+
         assert_eq!(wanted, result);
 
         drop(tmp_file);
@@ -214,6 +278,8 @@ def plan_notif(Variables, ParamsDict, MenageCarac):
     #[test]
     fn unvalid_toml_file_typo_composante_populate() -> KalkotoResult<()> {
         static UNVALID_TOML_BYTES: &[u8] = r#"
+name = "APA domicile"
+
 intitule_long = "Aide personnalisée à domicile"
 
 [[composante]]
@@ -256,11 +322,16 @@ def plan_cons(Variables, ParamsDict, MenageCarac):
         let mut tmp_file = File::create(&file_path).map_err(PolicyAdapterError::IO)?;
         fs::write(&file_path, UNVALID_TOML_BYTES).map_err(PolicyAdapterError::IO)?;
 
-        let toml_adapter = TomlInputAdapter::new(file_path);
+        let toml_adapter = TomlInputAdapter::new();
+
+        let mut empty_buf = String::new();
+
+        let toml_adapter = toml_adapter.populate_from_path(file_path, &mut empty_buf);
 
         let wanted = true;
 
-        let result = toml_adapter.create_valid_policy_input().is_err();
+        let result = toml_adapter.is_err();
+
         assert_eq!(wanted, result);
 
         drop(tmp_file);
@@ -268,11 +339,10 @@ def plan_cons(Variables, ParamsDict, MenageCarac):
 
         Ok(())
     }
+
     #[test]
     fn err_toml_not_valid_file_path() -> KalkotoResult<()> {
-        let result = TomlInputAdapter::new("nonexistent_path.toml")
-            .create_valid_policy_input()
-            .is_err();
+        let result = TomlInputAdapter::new().create_valid_policy_input().is_err();
 
         let wanted = true;
 

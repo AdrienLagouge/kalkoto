@@ -35,7 +35,7 @@ impl CsvInputAdapter {
 
 impl CsvInputAdapter {
     pub fn populate_from_buf(
-        &self,
+        self,
         input_buf: &[u8],
     ) -> KalkotoResult<(HashSet<String>, Vec<Menage>)> {
         let mut rdr = ReaderBuilder::new()
@@ -90,7 +90,7 @@ impl CsvInputAdapter {
         Ok((headers_set, vec_menage))
     }
 
-    pub fn populate_from_path<P>(&self, path: P, buf_string: &mut String) -> KalkotoResult<Self>
+    pub fn populate_from_path<P>(self, path: P, buf_string: &mut String) -> KalkotoResult<Self>
     where
         P: AsRef<Path>,
     {
@@ -105,9 +105,9 @@ impl CsvInputAdapter {
             Err(e) => return Err(From::from(MenageListAdapterError::IO(e))),
         };
 
-        let output_slice = buf_string.as_bytes();
+        let input_slice = buf_string.as_bytes();
 
-        let (set_caracteristiques, liste_menages) = self.populate_from_buf(output_slice)?;
+        let (set_caracteristiques, liste_menages) = self.populate_from_buf(input_slice)?;
 
         Ok(CsvInputAdapter {
             set_caracteristiques: Some(set_caracteristiques),

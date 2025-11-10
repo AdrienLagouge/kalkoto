@@ -27,6 +27,8 @@ struct Args {
 fn main() -> Result<()> {
     let args = Args::parse();
 
+    let mut csv_empty_buf = String::new();
+
     let mut csv_writer = CSVOutputAdapter::new();
 
     if let Some(prefix) = args.prefix.as_deref() {
@@ -44,10 +46,8 @@ fn main() -> Result<()> {
             .underlined()
     );
 
-    let mut csv_input_adapter = csv_input_adapter::CsvInputAdapter::new();
-    let mut csv_content = String::new();
-    csv_input_adapter =
-        csv_input_adapter.populate_from_path(&args.menage_input, &mut csv_content)?;
+    let csv_input_adapter = csv_input_adapter::CsvInputAdapter::new()
+        .populate_from_path(&args.menage_input, &mut csv_empty_buf)?;
 
     let sim_builder = sim_builder.add_menage_input(csv_input_adapter)?;
 
@@ -61,9 +61,12 @@ fn main() -> Result<()> {
             .underlined()
     );
 
-    let toml_input_adapter_baseline = TomlInputAdapter::new(&args.baseline_policy_input);
+    let mut baseline_empty_buf = String::new();
 
-    let mut sim_builder = sim_builder.add_valid_baseline_policy(&toml_input_adapter_baseline)?;
+    let toml_input_adapter_baseline = TomlInputAdapter::new()
+        .populate_from_path(&args.baseline_policy_input, &mut baseline_empty_buf)?;
+
+    let mut sim_builder = sim_builder.add_valid_baseline_policy(toml_input_adapter_baseline)?;
 
     println!("{}", &sim_builder.policy_baseline.0);
 
@@ -87,10 +90,12 @@ fn main() -> Result<()> {
                 .underlined()
         );
 
-        let toml_input_adapter_variante = TomlInputAdapter::new(&variante_input);
+        let mut variante_empty_buf = String::new();
 
-        let mut sim_builder =
-            sim_builder.add_valid_variante_policy(&toml_input_adapter_variante)?;
+        let toml_input_adapter_variante =
+            TomlInputAdapter::new().populate_from_path(&variante_input, &mut variante_empty_buf)?;
+
+        let mut sim_builder = sim_builder.add_valid_variante_policy(toml_input_adapter_variante)?;
 
         println!("{}", &sim_builder.policy_variante.0);
 
