@@ -1,11 +1,15 @@
-use anyhow::Result;
+use std::ffi::OsStr;
+use std::path::Path;
+
 use clap::Parser;
 use crossterm::style::Stylize;
+use kalkoto_lib::adapters::input_adapters::arrow_input_adapter::ArrowInputAdapter;
 use kalkoto_lib::adapters::input_adapters::*;
 use kalkoto_lib::adapters::output_adapters::csv_output_adapter::CSVOutputAdapter;
 use kalkoto_lib::entities::simulator::{
     EmptyBaselineInput, EmptyMenageInput, EmptyVarianteInput, SimulatorBuilder,
 };
+use kalkoto_lib::KalkotoResult;
 use toml_input_adapter::TomlInputAdapter;
 
 #[derive(Parser)]
@@ -24,10 +28,37 @@ struct Args {
     prefix: Option<String>,
 }
 
-fn main() -> Result<()> {
+fn dispatch_input_adapter<P: AsRef<Path>>(
+    menage_input_path: P,
+) -> KalkotoResult<impl MenageListAdapter> {
+    match menage_input_path
+        .as_ref()
+        .extension()
+        .and_then(OsStr::to_str)
+    {
+        Some("arrow") => Ok(MenageAdapter::ArrowAdapter(
+            ArrowInputAdapter::new().populate_from_path(menage_input_path)?,
+        )),
+        Some("csv") => {
+            let mut csv_empty_buf = String::new();
+            Ok(MenageAdapter::CSVAdapter(
+                csv_input_adapter::CsvInputAdapter::new()
+                    .populate_from_path(menage_input_path, &mut csv_empty_buf)?,
+            ))
+        }
+        _ => Err(MenageListAdapterError::FileFormat(
+            "Le fichier indiqué n'est pas un Arrow dataframe".into(),
+        )
+        .into()),
+    }
+}
+
+fn main() -> KalkotoResult<()> {
     let args = Args::parse();
 
-    let mut csv_empty_buf = String::new();
+    let menage_input_path = Path::new(&args.menage_input);
+
+    let menage_input_adapter = dispatch_input_adapter(menage_input_path)?;
 
     let mut csv_writer = CSVOutputAdapter::new();
 
@@ -45,11 +76,9 @@ fn main() -> Result<()> {
             .bold()
             .underlined()
     );
+    println!("Debug {:?}", &args.menage_input);
 
-    let csv_input_adapter = csv_input_adapter::CsvInputAdapter::new()
-        .populate_from_path(&args.menage_input, &mut csv_empty_buf)?;
-
-    let sim_builder = sim_builder.add_menage_input(csv_input_adapter)?;
+    let sim_builder = sim_builder.add_menage_input(&menage_input_adapter)?;
 
     println!("{}", &sim_builder.menage_input.0);
 

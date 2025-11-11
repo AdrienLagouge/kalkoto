@@ -1,3 +1,8 @@
+use arrow::array::ArrowNumericType;
+use pyo3::exceptions::PySyntaxWarning;
+
+use crate::adapters::input_adapters::arrow_input_adapter::ArrowInputAdapter;
+use crate::adapters::input_adapters::csv_input_adapter::CsvInputAdapter;
 use crate::entities::menage::*;
 use crate::entities::menage_input::*;
 use crate::entities::policy::*;
@@ -7,20 +12,35 @@ use std::fmt::Display;
 use std::fs::write;
 use std::{collections::HashSet, error::Error, fmt::Debug};
 
+pub mod arrow_input_adapter;
 pub mod csv_input_adapter;
 pub mod toml_input_adapter;
+
+pub enum MenageAdapter {
+    CSVAdapter(CsvInputAdapter),
+    ArrowAdapter(ArrowInputAdapter),
+}
 
 #[derive(thiserror::Error)]
 pub enum MenageListAdapterError {
     #[error("Erreur à la lecture du stream d'input ménages")]
     IO(#[from] std::io::Error),
 
+    #[error("Erreur de format de fichier d'input ménages\n\t\t->{0}")]
+    FileFormat(String),
+
     #[error("Erreur à la validation de la liste des cas-types pour les ménages {} et {}.\nCause : {}.\nConseil : {}",.fault_index,.fault_index+1,.cause,.conseil)]
-    ValidationError {
+    Validation {
         fault_index: i32,
         cause: String,
         conseil: String,
     },
+
+    #[error("Erreur à la lecture du dataframe Arrow")]
+    Arrow(#[from] arrow::error::ArrowError),
+
+    #[error("Validation impossible : le fichier ménages n'a pas encore été initialisé !")]
+    Uninitialized,
 }
 
 impl Debug for MenageListAdapterError {
@@ -37,15 +57,34 @@ impl Debug for MenageListAdapterError {
 // les caractéristiques ont été vérifiées
 pub trait MenageListAdapter {
     fn create_valid_menage_input(
-        self,
+        &self,
         empty_menage_input: MenageInputBuilder<EmptyList>,
     ) -> KalkotoResult<MenageInput>;
+}
+
+impl MenageListAdapter for MenageAdapter {
+    fn create_valid_menage_input(
+        &self,
+        empty_menage_input: MenageInputBuilder<EmptyList>,
+    ) -> KalkotoResult<MenageInput> {
+        match self {
+            Self::CSVAdapter(csv_input_adapter) => {
+                csv_input_adapter.create_valid_menage_input(empty_menage_input)
+            }
+            Self::ArrowAdapter(arrow_input_adapter) => {
+                arrow_input_adapter.create_valid_menage_input(empty_menage_input)
+            }
+        }
+    }
 }
 
 #[derive(thiserror::Error, Debug)]
 pub enum PolicyAdapterError {
     #[error("Erreur à l'ouverture du fichier")]
     IO(#[from] std::io::Error),
+
+    #[error("Erreur de format de fichier d'input policy\n\t\t->{0}")]
+    FileFormat(String),
 
     #[error("Erreur à la lecture du fichier TOML")]
     UTF8(#[from] std::str::Utf8Error),
@@ -122,7 +161,7 @@ mod tests {
         };
 
         let result = MenageInputBuilder::<EmptyList>::new()
-            .from_unvalidated_liste_menage(valide_menage_list)
+            .from_unvalidated_liste_menage(&valide_menage_list)
             .validate_liste_menage()?
             .build_valide_menage_input()?;
 
@@ -165,7 +204,7 @@ mod tests {
 
         let wanted = true;
         let mut result = MenageInputBuilder::<EmptyList>::new()
-            .from_unvalidated_liste_menage(invalid_menage_list)
+            .from_unvalidated_liste_menage(&invalid_menage_list)
             .validate_liste_menage()
             .is_err();
         assert_eq!(wanted, result);
@@ -175,7 +214,7 @@ mod tests {
     fn err_empty_list() {
         let wanted = true;
         let result = MenageInputBuilder::<EmptyList>::new()
-            .from_unvalidated_liste_menage(vec![])
+            .from_unvalidated_liste_menage(&[])
             .validate_liste_menage()
             .is_err();
         assert_eq!(wanted, result);

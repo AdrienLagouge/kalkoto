@@ -3,6 +3,7 @@ use crate::entities::menage::{Caracteristique, Menage};
 use crate::entities::menage_input::{MenageInput, MenageInputBuilder};
 use crate::{KalkotoError, KalkotoResult};
 use csv::{Reader, ReaderBuilder, StringRecord};
+use std::ffi::OsStr;
 use std::{
     collections::{HashMap, HashSet},
     error::Error,
@@ -13,7 +14,7 @@ use std::{
 
 impl From<csv::Error> for MenageListAdapterError {
     fn from(e: csv::Error) -> MenageListAdapterError {
-        MenageListAdapterError::ValidationError {
+        MenageListAdapterError::Validation {
             fault_index: 0,
             cause: "Problème à la lecture du header et/ou du contenu du CSV".to_string(),
             conseil: "Vérifier le fichier CSV".to_string(),
@@ -47,7 +48,7 @@ impl CsvInputAdapter {
         let mut vec_menage: Vec<Menage> = vec![];
 
         if let Some(result) = rdr.records().next() {
-            let headers = result.map_err(|e| MenageListAdapterError::ValidationError {
+            let headers = result.map_err(|e| MenageListAdapterError::Validation {
                 fault_index: -1,
                 cause: "Problème à la lecture du header du CSV".to_string(),
                 conseil: "Vérifier le fichier CSV".to_string(),
@@ -60,7 +61,7 @@ impl CsvInputAdapter {
 
             for (index, row) in rdr.records().enumerate() {
                 let caracteristiques_vec: Vec<Caracteristique> = row
-                    .map_err(|e| MenageListAdapterError::ValidationError {
+                    .map_err(|e| MenageListAdapterError::Validation {
                         fault_index: index as i32,
                         cause: "Les caractéristiques de ces ménages semblent invalides".to_string(),
                         conseil: "Vérifier le fichier CSV".to_string(),
@@ -94,6 +95,15 @@ impl CsvInputAdapter {
     where
         P: AsRef<Path>,
     {
+        match path.as_ref().extension().and_then(OsStr::to_str) {
+            Some("csv") => (),
+            _ => {
+                return Err(From::from(MenageListAdapterError::FileFormat(
+                    "Le fichier indiqué n'est pas un CSV".into(),
+                )))
+            }
+        }
+
         let mut f = match File::open(path) {
             Ok(file) => file,
             Err(e) => return Err(From::from(MenageListAdapterError::IO(e))),
@@ -118,15 +128,18 @@ impl CsvInputAdapter {
 
 impl MenageListAdapter for CsvInputAdapter {
     fn create_valid_menage_input(
-        self,
+        &self,
         empty_menage_input: MenageInputBuilder<super::EmptyList>,
     ) -> KalkotoResult<MenageInput> {
-        match (self.set_caracteristiques, self.liste_menages) {
+        match (
+            self.set_caracteristiques.as_ref(),
+            self.liste_menages.as_ref(),
+        ) {
             (Some(set_caracteristiques), Some(liste_menages)) => empty_menage_input
                 .from_unvalidated_liste_menage(liste_menages)
                 .validate_liste_menage()?
                 .build_valide_menage_input(),
-            (_, _) => Err(From::from(MenageListAdapterError::ValidationError {
+            (_, _) => Err(From::from(MenageListAdapterError::Validation {
                 fault_index: -1,
                 cause:
                     "Impossible de construire une liste valide de ménages à partir de fichier CSV"

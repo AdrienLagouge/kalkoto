@@ -65,11 +65,11 @@ impl MenageInputBuilder<EmptyList> {
 impl<U> MenageInputBuilder<U> where U: MenageList{
     pub fn from_unvalidated_liste_menage(
         self,
-        invalid_liste_menage: Vec<Menage>,
+        invalid_liste_menage: &[Menage],
     ) -> MenageInputBuilder<Unvalid> {
         MenageInputBuilder {
             set_caracteristiques: None,
-            liste_menage: Unvalid(invalid_liste_menage),
+            liste_menage: Unvalid(invalid_liste_menage.to_owned()),
         }
     }
 }
@@ -79,7 +79,7 @@ impl MenageInputBuilder<Unvalid> {
     let unvalidated_liste_menage = &self.liste_menage.0;
 
         if unvalidated_liste_menage.is_empty() {
-            return Err(From::from(MenageListAdapterError::ValidationError {
+            return Err(From::from(MenageListAdapterError::Validation {
                 fault_index: -1,
                 cause: "La liste de ménages à valider est vide.".to_string(),
                 conseil: "Vérifier le fichier d'input".to_string(),
@@ -96,7 +96,7 @@ impl MenageInputBuilder<Unvalid> {
 
         if let Some(first_faulty_menage) = first_faulty_menage.pop() {
             let carac_cause = format!("Les types ou les noms des caractéristiques de ces deux ménages ne correspondent pas. Problème à la caractéristique {0}",first_faulty_menage.2.clone());
-            return Err(crate::errors::KalkotoError::ListMenageError(MenageListAdapterError::ValidationError {
+            return Err(crate::errors::KalkotoError::ListMenageError(MenageListAdapterError::Validation {
                 fault_index: first_faulty_menage.1,
                 cause:  carac_cause,
                 conseil: "Vérifier le fichier d'input".to_owned(),
@@ -131,7 +131,7 @@ impl MenageInputBuilder<Valid> {
                 liste_menage_valide,
             })
         } else {
-        Err(From::from(MenageListAdapterError::ValidationError { fault_index: -1 
+        Err(From::from(MenageListAdapterError::Validation { fault_index: -1 
             , cause: "La liste des caractéristiques des ménages ne peut pas être établie à partir de la liste des ménages".to_string(), conseil: "Vérifier la liste des étapes pour construire un MenageInput".to_string()}))
     }}
 }

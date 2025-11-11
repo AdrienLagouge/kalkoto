@@ -4,6 +4,7 @@ use crate::entities::policy_input::PolicyInput;
 use crate::{KalkotoError, KalkotoResult};
 use rayon::slice::ParallelSlice;
 use std::collections::{HashMap, HashSet};
+use std::ffi::OsStr;
 use std::{
     error::Error,
     fs::{write, File},
@@ -85,6 +86,15 @@ impl TomlInputAdapter {
     where
         P: AsRef<Path>,
     {
+        match path.as_ref().extension().and_then(OsStr::to_str) {
+            Some("toml") => (),
+            _ => {
+                return Err(From::from(PolicyAdapterError::FileFormat(
+                    "Le fichier indiqué n'est pas un TOML".into(),
+                )))
+            }
+        }
+
         let mut f = match File::open(path) {
             Ok(file) => file,
             Err(e) => return Err(From::from(PolicyAdapterError::IO(e))),
@@ -111,61 +121,62 @@ impl TomlInputAdapter {
 
 impl PolicyAdapter for TomlInputAdapter {
     fn create_valid_policy_input(self) -> KalkotoResult<PolicyInput> {
-        if let (Some(name), Some(intitule_long), Some(mut composantes)) = (
+        match (
             self.policy_name,
             self.policy_intitule,
             self.policy_composantes,
         ) {
-            composantes.sort_by_key(|c| c.logical_order);
+            (Some(name), Some(intitule_long), Some(mut composantes)) => {
+                composantes.sort_by_key(|c| c.logical_order);
 
-            let mut policy_parameters_intitules = HashMap::new();
-            let mut policy_parameters_values = HashMap::new();
-            let mut policy_caracteristiques = HashSet::new();
+                let mut policy_parameters_intitules = HashMap::new();
+                let mut policy_parameters_values = HashMap::new();
+                let mut policy_caracteristiques = HashSet::new();
 
-            for composante in composantes.iter() {
-                let temp_dict_names: HashMap<String, String> = composante
-                    .parameters
-                    .names
-                    .iter()
-                    .zip(composante.parameters.intitules_long.iter())
-                    .map(|(name, intitule)| (name.clone(), intitule.clone()))
-                    .collect();
-                policy_parameters_intitules.extend(temp_dict_names);
+                for composante in composantes.iter() {
+                    let temp_dict_names: HashMap<String, String> = composante
+                        .parameters
+                        .names
+                        .iter()
+                        .zip(composante.parameters.intitules_long.iter())
+                        .map(|(name, intitule)| (name.clone(), intitule.clone()))
+                        .collect();
+                    policy_parameters_intitules.extend(temp_dict_names);
 
-                let temp_dict_values: HashMap<String, f64> = composante
-                    .parameters
-                    .names
-                    .iter()
-                    .zip(composante.parameters.values.iter())
-                    .map(|(name, intitule)| (name.clone(), *intitule))
-                    .collect();
-                policy_parameters_values.extend(temp_dict_values);
+                    let temp_dict_values: HashMap<String, f64> = composante
+                        .parameters
+                        .names
+                        .iter()
+                        .zip(composante.parameters.values.iter())
+                        .map(|(name, intitule)| (name.clone(), *intitule))
+                        .collect();
+                    policy_parameters_values.extend(temp_dict_values);
 
-                let temp_set: HashSet<String> = composante
-                    .caracteristiques_dependencies
-                    .iter()
-                    .cloned()
-                    .collect();
-                policy_caracteristiques.extend(temp_set);
+                    let temp_set: HashSet<String> = composante
+                        .caracteristiques_dependencies
+                        .iter()
+                        .cloned()
+                        .collect();
+                    policy_caracteristiques.extend(temp_set);
+                }
+
+                let policy = Policy {
+                    name,
+                    intitule_long,
+                    composantes_ordonnees: composantes,
+                    parameters_intitules: policy_parameters_intitules.clone(),
+                    parameters_values: policy_parameters_values.clone(),
+                    caracteristiques_menages: policy_caracteristiques.clone(),
+                    python_functions: None,
+                };
+
+                let policy = policy.populate_python_functions()?;
+
+                Ok(PolicyInput {
+                    valid_policy: policy,
+                })
             }
-
-            let policy = Policy {
-                name,
-                intitule_long,
-                composantes_ordonnees: composantes,
-                parameters_intitules: policy_parameters_intitules.clone(),
-                parameters_values: policy_parameters_values.clone(),
-                caracteristiques_menages: policy_caracteristiques.clone(),
-                python_functions: None,
-            };
-
-            let policy = policy.populate_python_functions()?;
-
-            Ok(PolicyInput {
-                valid_policy: policy,
-            })
-        } else {
-            Err(From::from(PolicyAdapterError::Trait))
+            _ => Err(From::from(PolicyAdapterError::Trait)),
         }
     }
 }
