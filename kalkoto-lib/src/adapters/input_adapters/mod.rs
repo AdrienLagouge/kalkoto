@@ -57,14 +57,14 @@ impl Debug for MenageListAdapterError {
 // les caractéristiques ont été vérifiées
 pub trait MenageListAdapter {
     fn create_valid_menage_input(
-        &self,
+        self,
         empty_menage_input: MenageInputBuilder<EmptyList>,
     ) -> KalkotoResult<MenageInput>;
 }
 
 impl MenageListAdapter for MenageAdapter {
     fn create_valid_menage_input(
-        &self,
+        self,
         empty_menage_input: MenageInputBuilder<EmptyList>,
     ) -> KalkotoResult<MenageInput> {
         match self {

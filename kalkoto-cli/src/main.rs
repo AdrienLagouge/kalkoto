@@ -78,7 +78,7 @@ fn main() -> KalkotoResult<()> {
     );
     println!("Debug {:?}", &args.menage_input);
 
-    let sim_builder = sim_builder.add_menage_input(&menage_input_adapter)?;
+    let sim_builder = sim_builder.add_menage_input(menage_input_adapter)?;
 
     println!("{}", &sim_builder.menage_input.0);
 

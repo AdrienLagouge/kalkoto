@@ -59,7 +59,7 @@ impl SimulatorBuilder<EmptyMenageInput, EmptyBaselineInput, EmptyVarianteInput> 
 
     pub fn add_menage_input<M: MenageListAdapter>(
         self,
-        menage_input_adapter: &M,
+        menage_input_adapter: M,
     ) -> KalkotoResult<SimulatorBuilder<ValidMenageInput, EmptyBaselineInput, EmptyVarianteInput>>
     {
         let start_menage_list = MenageInputBuilder::<EmptyList>::new();

@@ -44,11 +44,7 @@ impl ArrowInputAdapter {
         let mut reader = FileReader::try_new(std::io::Cursor::new(mmap), None)
             .map_err(MenageListAdapterError::Arrow)?;
 
-        let extracted_dataframe: KalkotoResult<(
-            Vec<(String, Vec<Caracteristique>)>,
-            usize,
-            usize,
-        )> = match reader.next() {
+        let extracted_dataframe: KalkotoResult<Self> = match reader.next() {
             Some(batch) => {
                 let batch = batch.map_err(MenageListAdapterError::Arrow)?;
                 let (schema, columns, nrow) = batch.into_parts();
@@ -74,7 +70,11 @@ impl ArrowInputAdapter {
                         .zip(column_values)
                         .collect::<Vec<(String, Vec<Caracteristique>)>>();
 
-                Ok((column_extract, ncol, nrow))
+                Ok(Self {
+                    dataframe: Some(column_extract),
+                    ncol,
+                    nrow,
+                })
             }
             _ => Err(KalkotoError::ListMenageError(
                 MenageListAdapterError::Arrow(arrow::error::ArrowError::ParseError(
@@ -83,13 +83,7 @@ impl ArrowInputAdapter {
             )),
         };
 
-        let (column_extract, ncol, nrow) = extracted_dataframe?;
-
-        Ok(Self {
-            dataframe: Some(column_extract),
-            ncol,
-            nrow,
-        })
+        extracted_dataframe
     }
 }
 
@@ -199,10 +193,10 @@ pub fn extract_values_from_arrow(
 
 impl MenageListAdapter for ArrowInputAdapter {
     fn create_valid_menage_input(
-        &self,
+        self,
         empty_menage_input: MenageInputBuilder<crate::entities::menage_input::EmptyList>,
     ) -> KalkotoResult<MenageInput> {
-        match self.dataframe.as_ref() {
+        match self.dataframe {
             Some(dataframe) => {
                 let mut liste_menages = vec![Menage::new(0); self.nrow];
                 //(Some(set_caracteristiques), Some(liste_menages)) =
