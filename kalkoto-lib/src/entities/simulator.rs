@@ -1,5 +1,5 @@
-use crate::adapters::input_adapters::{MenageListAdapter, PolicyAdapter};
-use crate::adapters::output_adapters::OutputAdapter;
+use crate::adapters::input_adapters::{MenageListCreator, PolicyCreator};
+use crate::adapters::output_adapters::OutputWriter;
 use crate::entities::menage_input::*;
 use crate::entities::policy_input::*;
 use crate::{KalkotoError, KalkotoResult};
@@ -57,7 +57,7 @@ impl SimulatorBuilder<EmptyMenageInput, EmptyBaselineInput, EmptyVarianteInput> 
         SimulatorBuilder::default()
     }
 
-    pub fn add_menage_input<M: MenageListAdapter>(
+    pub fn add_menage_input<M: MenageListCreator>(
         self,
         menage_input_adapter: M,
     ) -> KalkotoResult<SimulatorBuilder<ValidMenageInput, EmptyBaselineInput, EmptyVarianteInput>>
@@ -77,7 +77,7 @@ impl SimulatorBuilder<EmptyMenageInput, EmptyBaselineInput, EmptyVarianteInput> 
 }
 
 impl SimulatorBuilder<ValidMenageInput, EmptyBaselineInput, EmptyVarianteInput> {
-    pub fn add_valid_baseline_policy<P: PolicyAdapter>(
+    pub fn add_valid_baseline_policy<P: PolicyCreator>(
         self,
         baseline_policy_adapter: P,
     ) -> KalkotoResult<SimulatorBuilder<ValidMenageInput, ValidBaselineInput, EmptyVarianteInput>>
@@ -123,7 +123,7 @@ impl<E> SimulatorBuilder<ValidMenageInput, ValidBaselineInput, E> {
         Ok(())
     }
 
-    pub fn export_baseline<O: OutputAdapter>(
+    pub fn export_baseline<O: OutputWriter>(
         &self,
         output_adapter: &O,
     ) -> KalkotoResult<()> {
@@ -132,7 +132,7 @@ impl<E> SimulatorBuilder<ValidMenageInput, ValidBaselineInput, E> {
 }
 
 impl SimulatorBuilder<ValidMenageInput, ValidBaselineInput, EmptyVarianteInput> {
-    pub fn add_valid_variante_policy<P: PolicyAdapter>(
+    pub fn add_valid_variante_policy<P: PolicyCreator>(
         mut self,
         variante_policy_adapter: P,
     ) -> KalkotoResult<SimulatorBuilder<ValidMenageInput, ValidBaselineInput, ValidVarianteInput>>
@@ -200,7 +200,7 @@ impl SimulatorBuilder<ValidMenageInput, ValidBaselineInput, ValidVarianteInput> 
         Ok(())
     }
 
-    pub fn export_variante<O: OutputAdapter>(
+    pub fn export_variante<O: OutputWriter>(
         &self,
         output_adapter: &O,
     ) -> KalkotoResult<()> {

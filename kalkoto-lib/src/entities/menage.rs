@@ -125,16 +125,16 @@ mod tests {
             .caracteristiques
             .insert(String::from("Revenu"), Caracteristique::Numeric(500.65f64));
 
-        let mut second_menage = Menage::new(2);
-        second_menage
+        let mut faulty_menage = Menage::new(2);
+        faulty_menage
             .caracteristiques
             .insert(String::from("Age"), Caracteristique::Entier(30));
 
-        second_menage
+        faulty_menage
             .caracteristiques
             .insert(String::from("Revenu"), Caracteristique::Entier(400));
 
-        let result = first_menage.compare_type_carac(&second_menage);
+        let result = first_menage.compare_type_carac(&faulty_menage);
         assert_eq!(wanted, result);
     }
 
@@ -152,17 +152,17 @@ mod tests {
             Caracteristique::Textuel("Locataire".to_owned()),
         );
 
-        let mut second_menage = Menage::new(2);
-        second_menage
+        let mut faulty_menage = Menage::new(2);
+        faulty_menage
             .caracteristiques
             .insert(String::from("Age"), Caracteristique::Entier(30));
 
-        second_menage.caracteristiques.insert(
+        faulty_menage.caracteristiques.insert(
             String::from("TypeLogenment"),
             Caracteristique::Textuel("Locataire".to_owned()),
         );
 
-        let result = first_menage.compare_type_carac(&second_menage);
+        let result = first_menage.compare_type_carac(&faulty_menage);
         assert_eq!(wanted, result);
     }
 }

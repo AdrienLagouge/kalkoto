@@ -1,4 +1,4 @@
-use crate::adapters::{MenageListAdapter, MenageListAdapterError};
+use crate::adapters::input_adapters::{MenageListAdapterError, MenageListCreator};
 use crate::entities::menage::{self, Caracteristique, Menage};
 use crate::entities::menage_input::{MenageInput, MenageInputBuilder};
 use crate::{KalkotoError, KalkotoResult};
@@ -191,7 +191,7 @@ pub fn extract_values_from_arrow(
     }
 }
 
-impl MenageListAdapter for ArrowInputAdapter {
+impl MenageListCreator for ArrowInputAdapter {
     fn create_valid_menage_input(
         self,
         empty_menage_input: MenageInputBuilder<crate::entities::menage_input::EmptyList>,

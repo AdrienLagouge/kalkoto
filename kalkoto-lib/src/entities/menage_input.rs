@@ -40,16 +40,17 @@ impl Display for MenageInput {
         )?;
         writeln!(
             f,
-            "Liste des caractéristiques trouvées dans l'input Ménages :\n{:?}\n",
+            ">>>> Liste des caractéristiques trouvées dans l'input Ménages :\n\n{:?}\n",
             self.set_caracteristiques_valide
         )?;
         writeln!(
             f,
-            "Exemple du premier ménage trouvé dans l'input Ménages :\n{:?}",
+            ">>>> Exemple du premier ménage trouvé dans l'input Ménages :\n\n{:?}",
             self.liste_menage_valide[0]
         )
     }
 }
+
 #[derive(Debug, Clone, Default)]
 pub struct MenageInputBuilder<U: MenageList> {
     set_caracteristiques: Option<HashSet<String>>,

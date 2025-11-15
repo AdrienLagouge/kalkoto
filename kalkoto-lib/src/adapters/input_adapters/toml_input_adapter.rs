@@ -1,4 +1,4 @@
-use crate::adapters::{PolicyAdapter, PolicyAdapterError};
+use crate::adapters::input_adapters::{PolicyAdapterError, PolicyCreator};
 use crate::entities::policy::{Composante, Parameters, Policy};
 use crate::entities::policy_input::PolicyInput;
 use crate::{KalkotoError, KalkotoResult};
@@ -119,7 +119,7 @@ impl TomlInputAdapter {
     }
 }
 
-impl PolicyAdapter for TomlInputAdapter {
+impl PolicyCreator for TomlInputAdapter {
     fn create_valid_policy_input(self) -> KalkotoResult<PolicyInput> {
         match (
             self.policy_name,

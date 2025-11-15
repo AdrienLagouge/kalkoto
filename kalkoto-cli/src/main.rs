@@ -1,50 +1,82 @@
-use std::ffi::OsStr;
-use std::path::Path;
-
 use clap::Parser;
 use crossterm::style::Stylize;
 use kalkoto_lib::adapters::input_adapters::arrow_input_adapter::ArrowInputAdapter;
 use kalkoto_lib::adapters::input_adapters::*;
+use kalkoto_lib::adapters::output_adapters::arrow_output_adapter::ArrowOutputAdapter;
 use kalkoto_lib::adapters::output_adapters::csv_output_adapter::CSVOutputAdapter;
+use kalkoto_lib::adapters::output_adapters::{OutputAdapter, OutputWriter};
 use kalkoto_lib::entities::simulator::{
     EmptyBaselineInput, EmptyMenageInput, EmptyVarianteInput, SimulatorBuilder,
 };
 use kalkoto_lib::KalkotoResult;
+use std::path::Path;
 use toml_input_adapter::TomlInputAdapter;
 
 #[derive(Parser)]
 #[command(author,version,about,long_about = None)]
 struct Args {
-    #[arg(short, long, value_name = "Fichier ménages")]
+    #[arg(short, long, value_name = "Type du fichier ménages (csv ou arrow)")]
+    type_menage_input: String,
+
+    #[arg(short, long, value_name = "Chemin vers le fichier ménages")]
     menage_input: String,
 
-    #[arg(short, long, value_name = "Fichier politique publique de référence")]
+    #[arg(
+        short,
+        long,
+        value_name = "Chemin vers le fichier TOML de la politique publique de référence"
+    )]
     baseline_policy_input: String,
 
-    #[arg(short, long, value_name = "Fichier politique publique de variante")]
+    #[arg(
+        short,
+        long,
+        value_name = "Chemin vers le fichier TOML de la politique publique de variante"
+    )]
     variante_policy_input: Option<String>,
 
     #[arg(short, long, value_name = "Préfixe pour les fichiers de sortie")]
     prefix: Option<String>,
 }
 
-fn dispatch_input_adapter<P: AsRef<Path>>(
+struct Adapters<I, O>
+where
+    I: MenageListCreator,
+    O: OutputWriter,
+{
+    input_adapter: I,
+    output_adapter: O,
+}
+
+fn dispatch_adapters<P: AsRef<Path>>(
+    type_fichier_menages: &str,
     menage_input_path: P,
-) -> KalkotoResult<impl MenageListAdapter> {
-    match menage_input_path
-        .as_ref()
-        .extension()
-        .and_then(OsStr::to_str)
-    {
-        Some("arrow") => Ok(MenageAdapter::ArrowAdapter(
-            ArrowInputAdapter::new().populate_from_path(menage_input_path)?,
-        )),
-        Some("csv") => {
+    prefix: &Option<String>,
+) -> KalkotoResult<Adapters<MenageAdapter, OutputAdapter>> {
+    match type_fichier_menages {
+        "arrow" => {
+            let input_adapter = ArrowInputAdapter::new().populate_from_path(menage_input_path)?;
+            let mut output_adapter = ArrowOutputAdapter::new();
+            if let Some(prefix) = prefix.as_deref() {
+                output_adapter = output_adapter.add_output_prefix(prefix.to_string())
+            };
+            Ok(Adapters {
+                input_adapter: MenageAdapter::Arrow(input_adapter),
+                output_adapter: OutputAdapter::Arrow(output_adapter),
+            })
+        }
+        "csv" => {
             let mut csv_empty_buf = String::new();
-            Ok(MenageAdapter::CSVAdapter(
-                csv_input_adapter::CsvInputAdapter::new()
-                    .populate_from_path(menage_input_path, &mut csv_empty_buf)?,
-            ))
+            let input_adapter = csv_input_adapter::CsvInputAdapter::new()
+                .populate_from_path(menage_input_path, &mut csv_empty_buf)?;
+            let mut output_adapter = CSVOutputAdapter::new();
+            if let Some(prefix) = prefix.as_deref() {
+                output_adapter = output_adapter.add_output_prefix(prefix.to_string())
+            }
+            Ok(Adapters {
+                input_adapter: MenageAdapter::CSV(input_adapter),
+                output_adapter: OutputAdapter::CSV(output_adapter),
+            })
         }
         _ => Err(MenageListAdapterError::FileFormat(
             "Le fichier indiqué n'est pas un Arrow dataframe".into(),
@@ -58,13 +90,11 @@ fn main() -> KalkotoResult<()> {
 
     let menage_input_path = Path::new(&args.menage_input);
 
-    let menage_input_adapter = dispatch_input_adapter(menage_input_path)?;
-
-    let mut csv_writer = CSVOutputAdapter::new();
-
-    if let Some(prefix) = args.prefix.as_deref() {
-        csv_writer = csv_writer.add_output_prefix(prefix.to_string())
-    }
+    let Adapters {
+        input_adapter,
+        output_adapter,
+    } = dispatch_adapters(&args.type_menage_input, menage_input_path, &args.prefix)?;
+    // let menage_input_adapter = dispatch_input_adapter(menage_input_path)?;
 
     let sim_builder =
         SimulatorBuilder::<EmptyMenageInput, EmptyBaselineInput, EmptyVarianteInput>::new();
@@ -76,9 +106,8 @@ fn main() -> KalkotoResult<()> {
             .bold()
             .underlined()
     );
-    println!("Debug {:?}", &args.menage_input);
 
-    let sim_builder = sim_builder.add_menage_input(menage_input_adapter)?;
+    let sim_builder = sim_builder.add_menage_input(input_adapter)?;
 
     println!("{}", &sim_builder.menage_input.0);
 
@@ -108,7 +137,7 @@ fn main() -> KalkotoResult<()> {
             .bold()
     );
 
-    sim_builder.export_baseline(&csv_writer)?;
+    sim_builder.export_baseline(&output_adapter)?;
 
     if let Some(variante_input) = args.variante_policy_input {
         println!(
@@ -137,7 +166,7 @@ fn main() -> KalkotoResult<()> {
                 .bold()
         );
 
-        sim_builder.export_variante(&csv_writer)?;
+        sim_builder.export_variante(&output_adapter)?;
     }
 
     Ok(())

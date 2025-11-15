@@ -16,12 +16,16 @@ impl Display for PolicyInput {
         )?;
         writeln!(
             f,
-            "Politique publique à simuler  trouvée dans l'input Policy :\n{:?}\n",
-            self.valid_policy.intitule_long
+            "Politique publique à simuler trouvée dans l'input Policy :",
         )?;
         writeln!(
             f,
-            "Liste ordonnée des composantes de cette politique publique :"
+            "{}\n",
+            self.valid_policy.intitule_long.clone().red().bold()
+        )?;
+        writeln!(
+            f,
+            ">>>> Liste ordonnée des composantes de cette politique publique :\n"
         )?;
         let composantes_names = self
             .valid_policy

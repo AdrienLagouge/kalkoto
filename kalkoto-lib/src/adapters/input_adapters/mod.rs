@@ -17,8 +17,8 @@ pub mod csv_input_adapter;
 pub mod toml_input_adapter;
 
 pub enum MenageAdapter {
-    CSVAdapter(CsvInputAdapter),
-    ArrowAdapter(ArrowInputAdapter),
+    CSV(CsvInputAdapter),
+    Arrow(ArrowInputAdapter),
 }
 
 #[derive(thiserror::Error)]
@@ -55,23 +55,23 @@ impl Debug for MenageListAdapterError {
 
 // Trait commun à tous les adapteurs de création d'une liste de ménages dont toutes
 // les caractéristiques ont été vérifiées
-pub trait MenageListAdapter {
+pub trait MenageListCreator {
     fn create_valid_menage_input(
         self,
         empty_menage_input: MenageInputBuilder<EmptyList>,
     ) -> KalkotoResult<MenageInput>;
 }
 
-impl MenageListAdapter for MenageAdapter {
+impl MenageListCreator for MenageAdapter {
     fn create_valid_menage_input(
         self,
         empty_menage_input: MenageInputBuilder<EmptyList>,
     ) -> KalkotoResult<MenageInput> {
         match self {
-            Self::CSVAdapter(csv_input_adapter) => {
+            Self::CSV(csv_input_adapter) => {
                 csv_input_adapter.create_valid_menage_input(empty_menage_input)
             }
-            Self::ArrowAdapter(arrow_input_adapter) => {
+            Self::Arrow(arrow_input_adapter) => {
                 arrow_input_adapter.create_valid_menage_input(empty_menage_input)
             }
         }
@@ -109,7 +109,7 @@ impl From<String> for PolicyAdapterError {
 }
 
 // Trait commun à tous les adapteurs de création d'une politique publique correctement initialisée
-pub trait PolicyAdapter {
+pub trait PolicyCreator {
     fn create_valid_policy_input(self) -> KalkotoResult<PolicyInput>;
 }
 

@@ -1,4 +1,4 @@
-use crate::adapters::{MenageListAdapter, MenageListAdapterError};
+use crate::adapters::input_adapters::{MenageListAdapterError, MenageListCreator};
 use crate::entities::menage::{Caracteristique, Menage};
 use crate::entities::menage_input::{MenageInput, MenageInputBuilder};
 use crate::{KalkotoError, KalkotoResult};
@@ -126,7 +126,7 @@ impl CsvInputAdapter {
     }
 }
 
-impl MenageListAdapter for CsvInputAdapter {
+impl MenageListCreator for CsvInputAdapter {
     fn create_valid_menage_input(
         self,
         empty_menage_input: MenageInputBuilder<super::EmptyList>,

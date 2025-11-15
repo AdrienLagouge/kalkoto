@@ -1,5 +1,5 @@
 use crate::{
-    adapters::output_adapters::{OutputAdapter, OutputAdapterError},
+    adapters::output_adapters::{OutputAdapterError, OutputWriter},
     entities::simulator::{
         SimulationError, SimulatorBuilder, ValidBaselineInput, ValidMenageInput, ValidVarianteInput,
     },
@@ -24,7 +24,7 @@ impl CSVOutputAdapter {
     }
 }
 
-impl OutputAdapter for CSVOutputAdapter {
+impl OutputWriter for CSVOutputAdapter {
     fn export_baseline_results<E>(
         &self,
         simulated: &SimulatorBuilder<ValidMenageInput, ValidBaselineInput, E>,
