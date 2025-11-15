@@ -1,6 +1,6 @@
 [workspace]
 
-members = ["kalkoto-app", "kalkoto-cli", "kalkoto-lib", "kalkoto-app","kalkoto-test"]
+members = ["kalkoto-app", "kalkoto-cli", "kalkoto-lib", "kalkoto-app"]
 
 resolver = "2"
 
