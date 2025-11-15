@@ -14,3 +14,5 @@ pub enum KalkotoError {
     #[error("Problème à l'export des résultats")]
     ExportError(#[from] crate::adapters::output_adapters::OutputAdapterError),
 }
+
+pub type KalkotoResult<T> = core::result::Result<T, crate::errors::KalkotoError>;
