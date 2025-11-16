@@ -1,8 +1,11 @@
 use crate::{
-    adapters::output_adapters::{OutputAdapterError, OutputWriter},
-    entities::menage::{Caracteristique, Menage},
-    entities::simulator::{
-        SimulationError, SimulatorBuilder, ValidBaselineInput, ValidMenageInput, ValidVarianteInput,
+    adapters::output_adapters::{csv_output_adapter, OutputAdapterError, OutputWriter},
+    entities::{
+        menage::{Caracteristique, Menage},
+        simulator::{
+            SimulationError, SimulatorBuilder, ValidBaselineInput, ValidMenageInput,
+            ValidVarianteInput,
+        },
     },
     KalkotoError, KalkotoResult,
 };
@@ -10,7 +13,7 @@ use arrow::array::{Array, ArrayRef, Float64Array, Int32Array, RecordBatch, Strin
 use arrow::datatypes::{DataType, Field, Schema};
 use arrow_ipc::writer::FileWriter;
 use itertools::Itertools;
-use std::{collections::HashMap, fs::File, path::Path, sync::Arc};
+use std::{collections::HashMap, fs::File, path::Path, sync::Arc, thread};
 
 #[derive(Default)]
 pub struct ArrowOutputAdapter {
@@ -69,57 +72,85 @@ impl OutputWriter for ArrowOutputAdapter {
         }
     }
 
-    fn export_variante_results(
-        &self,
-        simulated: &SimulatorBuilder<ValidMenageInput, ValidBaselineInput, ValidVarianteInput>,
+    fn export_variante_and_diff_results(
+        self,
+        simulated: SimulatorBuilder<ValidMenageInput, ValidBaselineInput, ValidVarianteInput>,
     ) -> KalkotoResult<()> {
-        let export_variante = match simulated.results_variante {
-            Some(ref results_variante) => {
-                let output_path = match &self.output_prefix {
-                    Some(output_prefix) => format!("{}-variante-results.arrow", output_prefix),
-                    _ => String::from("variante-results.arrow"),
-                };
+        let output_adapter = Arc::new(self);
+        let simulated = Arc::new(simulated);
 
-                let record_menage = create_record_batch_from_menage_list(
-                    &simulated.menage_input.0.liste_menage_valide,
-                )?;
+        let mut thread_handles = vec![];
 
-                let record_variante_results =
-                    create_record_batch_from_list_dict_results(results_variante)?;
+        let thread_1 = {
+            let output_adapter = output_adapter.clone();
+            let simulated = simulated.clone();
+            thread::spawn(move || -> KalkotoResult<()> {
+                match simulated.results_variante {
+                    Some(ref results_variante) => {
+                        let output_path = match &output_adapter.output_prefix {
+                            Some(output_prefix) => {
+                                format!("{}-variante-results.arrow", output_prefix)
+                            }
+                            _ => String::from("variante-results.arrow"),
+                        };
 
-                let final_record =
-                    create_final_record_batch(&record_menage, &record_variante_results)?;
+                        let record_menage = create_record_batch_from_menage_list(
+                            &simulated.menage_input.0.liste_menage_valide,
+                        )?;
 
-                write_final_record(&final_record, output_path)
-            }
-            None => Err(KalkotoError::from(OutputAdapterError::Custom(
-                "La simulation n'a pas encore été réalisée !".into(),
-            ))),
+                        let record_variante_results =
+                            create_record_batch_from_list_dict_results(results_variante)?;
+
+                        let final_record =
+                            create_final_record_batch(&record_menage, &record_variante_results)?;
+
+                        write_final_record(&final_record, output_path)
+                    }
+                    None => Err(KalkotoError::from(OutputAdapterError::Custom(
+                        "La simulation n'a pas encore été réalisée !".into(),
+                    ))),
+                }
+            })
         };
-        export_variante?;
 
-        let export_diff = match simulated.results_diff {
-            Some(ref results_diff) => {
-                let output_path = match &self.output_prefix {
-                    Some(output_prefix) => format!("{}-diff-results.arrow", output_prefix),
-                    _ => String::from("diff-results.arrow"),
-                };
+        thread_handles.push(thread_1);
 
-                let record_menage = create_record_batch_from_menage_list(
-                    &simulated.menage_input.0.liste_menage_valide,
-                )?;
+        let thread_2 = {
+            let output_adapter = output_adapter.clone();
+            let simulated = simulated.clone();
 
-                let record_diff_results = create_record_batch_from_list_dict_results(results_diff)?;
+            thread::spawn(move || match simulated.results_diff {
+                Some(ref results_diff) => {
+                    let output_path = match &output_adapter.output_prefix {
+                        Some(output_prefix) => format!("{}-diff-results.arrow", output_prefix),
+                        _ => String::from("diff-results.arrow"),
+                    };
 
-                let final_record = create_final_record_batch(&record_menage, &record_diff_results)?;
+                    let record_menage = create_record_batch_from_menage_list(
+                        &simulated.menage_input.0.liste_menage_valide,
+                    )?;
 
-                write_final_record(&final_record, output_path)
-            }
-            None => Err(KalkotoError::from(OutputAdapterError::Custom(
-                "La simulation n'a pas encore été réalisée !".into(),
-            ))),
+                    let record_diff_results =
+                        create_record_batch_from_list_dict_results(results_diff)?;
+
+                    let final_record =
+                        create_final_record_batch(&record_menage, &record_diff_results)?;
+
+                    write_final_record(&final_record, output_path)
+                }
+                None => Err(KalkotoError::from(OutputAdapterError::Custom(
+                    "La simulation n'a pas encore été réalisée !".into(),
+                ))),
+            })
         };
-        export_diff
+
+        thread_handles.push(thread_2);
+
+        for handle in thread_handles {
+            handle.join().unwrap()?
+        }
+
+        Ok(())
     }
 }
 

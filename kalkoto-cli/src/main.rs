@@ -166,7 +166,7 @@ fn main() -> KalkotoResult<()> {
                 .bold()
         );
 
-        sim_builder.export_variante(&output_adapter)?;
+        sim_builder.export_variante_and_diff(output_adapter)?;
     }
 
     Ok(())

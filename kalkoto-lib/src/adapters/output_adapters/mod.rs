@@ -14,9 +14,9 @@ pub trait OutputWriter {
         simulated: &SimulatorBuilder<ValidMenageInput, ValidBaselineInput, E>,
     ) -> KalkotoResult<()>;
 
-    fn export_variante_results(
-        &self,
-        simulated: &SimulatorBuilder<ValidMenageInput, ValidBaselineInput, ValidVarianteInput>,
+    fn export_variante_and_diff_results(
+        self,
+        simulated: SimulatorBuilder<ValidMenageInput, ValidBaselineInput, ValidVarianteInput>,
     ) -> KalkotoResult<()>;
 }
 
@@ -41,14 +41,16 @@ impl OutputWriter for OutputAdapter {
         }
     }
 
-    fn export_variante_results(
-        &self,
-        simulated: &SimulatorBuilder<ValidMenageInput, ValidBaselineInput, ValidVarianteInput>,
+    fn export_variante_and_diff_results(
+        self,
+        simulated: SimulatorBuilder<ValidMenageInput, ValidBaselineInput, ValidVarianteInput>,
     ) -> KalkotoResult<()> {
         match self {
-            Self::CSV(csv_output_adapter) => csv_output_adapter.export_variante_results(simulated),
+            Self::CSV(csv_output_adapter) => {
+                csv_output_adapter.export_variante_and_diff_results(simulated)
+            }
             Self::Arrow(arrow_output_adapter) => {
-                arrow_output_adapter.export_variante_results(simulated)
+                arrow_output_adapter.export_variante_and_diff_results(simulated)
             }
         }
     }
