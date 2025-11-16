@@ -1,5 +1,5 @@
 use crate::{
-    adapters::output_adapters::{csv_output_adapter, OutputAdapterError, OutputWriter},
+    adapters::output_adapters::{OutputAdapterError, OutputWriter},
     entities::{
         menage::{Caracteristique, Menage},
         simulator::{

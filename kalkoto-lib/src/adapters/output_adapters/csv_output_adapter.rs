@@ -1,7 +1,7 @@
 use std::{collections::HashMap, sync::Arc, thread};
 
 use crate::{
-    adapters::output_adapters::{arrow_output_adapter, OutputAdapterError, OutputWriter},
+    adapters::output_adapters::{OutputAdapterError, OutputWriter},
     entities::simulator::{
         SimulationError, SimulatorBuilder, ValidBaselineInput, ValidMenageInput, ValidVarianteInput,
     },
