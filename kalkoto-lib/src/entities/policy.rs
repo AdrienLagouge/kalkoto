@@ -1,17 +1,17 @@
 use crate::adapters::input_adapters::PolicyAdapterError;
-use crate::entities::menage::{Caracteristique, Menage};
+use crate::entities::menage::Menage;
 use crate::entities::simulator::SimulationError;
 use crate::{KalkotoError, KalkotoResult};
-use crossterm::cursor::RestorePosition;
+use itertools::Itertools;
+use pyo3::types::PyTuple;
+use pyo3::PythonVersionInfo;
 use pyo3::{prelude::*, types::IntoPyDict, types::PyDict, types::PyList};
-use pyo3_ffi::c_str;
+use pyo3_ffi::{c_str, PyEval_ReleaseLock};
 use rayon::prelude::*;
 use serde::Deserialize;
-use std::{
-    collections::{HashMap, HashSet},
-    ffi::CString,
-    sync::Mutex,
-};
+use std::collections::{HashMap, HashSet};
+use std::ffi::CString;
+use std::thread;
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct Parameters {
@@ -42,47 +42,52 @@ pub struct Composante {
 impl Composante {
     pub fn simulate_all_menages<'py>(
         &self,
-        py: Python<'py>,
-        py_menages_caract_dict: &Vec<Bound<'py, PyDict>>,
-        py_menages_variables_dict: &mut Vec<Bound<'py, PyDict>>,
+        chunksize: usize,
+        menages_caract_dict_list: &Bound<'py, PyList>,
+        vec_variables_dict_list: &mut Bound<'py, PyList>,
         parameters_dict: &Bound<'py, PyDict>,
-        python_functions_module: &Bound<'py, PyModule>,
-    ) -> KalkotoResult<()> {
-        let rustfunc = python_functions_module.getattr(&self.name).map_err(|e| {
-            SimulationError::PythonError {
-                source: e,
-                err_msg: format!(
-                    "Erreur lors de l'interprétation de la fonction Python de la composante {}",
-                    &self.name
-                ),
+        policy_py_module: &Bound<'py, PyModule>,
+        pool: &Bound<'py, PyAny>,
+    ) -> PyResult<()> {
+        Python::attach(|py| -> PyResult<()> {
+            let rustfunc = policy_py_module.getattr(&self.name)?;
+
+            //Préparation des arguments
+            let list_args = PyList::empty(py);
+            let name = self.name.clone();
+
+            for index in 0..menages_caract_dict_list.len() {
+                let menage_caract_dict = menages_caract_dict_list.get_item(index)?;
+                let vec_variables_dict = vec_variables_dict_list.get_item(index)?;
+
+                let args = PyTuple::new(
+                    py,
+                    [&vec_variables_dict, parameters_dict, &menage_caract_dict],
+                )?;
+
+                list_args.append(args)?;
             }
-        })?;
 
-        let python_simulation_result = py_menages_caract_dict
-            .iter()
-            .zip(py_menages_variables_dict.iter())
-            .try_for_each(|(py_menage_caract_dict, py_menage_variables_dict)| {
-                let args = (
-                    py_menage_variables_dict,
-                    &parameters_dict,
-                    py_menage_caract_dict,
-                );
+            let results = pool.call_method(
+                "starmap",
+                (rustfunc, list_args),
+                Some(&[("chunksize", chunksize)].into_py_dict(py)?),
+            )?;
 
-                let result = rustfunc.call(args, None);
+            for index in 0..vec_variables_dict_list.len() {
+                vec_variables_dict_list
+                    .get_item(index)?
+                    .set_item(&name, results.get_item(index)?)?;
+            }
 
-                match result {
-                    Ok(result) => {
-                        (*py_menage_variables_dict).set_item(self.name.to_owned(), result);
-                        Ok(())
-                    }
-                    Err(e) => Err(SimulationError::PythonError {
-                        source: e,
-                        err_msg: format!("Erreur lors du calcul de la composante {}", self.name),
-                    }),
-                }
-            });
-
-        Ok(python_simulation_result?)
+            Ok(())
+        })
+        // .map_err(|e| {
+        //     KalkotoError::from(SimulationError::PythonError {
+        //         source: e,
+        //         err_msg: "Erreur calcul".into(),
+        //     })
+        // })
     }
 }
 
@@ -123,116 +128,90 @@ impl Policy {
         &self,
         menages: &[Menage],
     ) -> KalkotoResult<Vec<HashMap<String, f64>>> {
-        if let Some(ref python_functions) = &self.python_functions {
-            let mut empty_vec_variables_dict: HashMap<String, f64> =
-                HashMap::with_capacity(self.composantes_ordonnees.len());
+        let mut empty_vec_variables_dict: HashMap<String, f64> =
+            HashMap::with_capacity(self.composantes_ordonnees.len());
 
-            self.composantes_ordonnees.iter().map(|composante| {
-                empty_vec_variables_dict.insert(composante.name.to_owned(), 0 as f64);
-            });
+        self.composantes_ordonnees.iter().map(|composante| {
+            empty_vec_variables_dict.insert(composante.name.to_owned(), 0 as f64);
+        });
 
-            let mut vec_variables_dict: Vec<HashMap<String, f64>> =
-                vec![empty_vec_variables_dict; menages.len()];
+        let mut vec_variables_dict: Vec<HashMap<String, f64>> =
+            vec![empty_vec_variables_dict; menages.len()];
 
-            Python::initialize();
+        let policy_py_module = self
+            .composantes_ordonnees
+            .iter()
+            .map(|composante| composante.function.0.clone())
+            .collect::<Vec<String>>()
+            .join("\n");
 
-            let output = Python::attach(|py| -> KalkotoResult<Vec<HashMap<String, f64>>> {
-                let composantemodule = PyModule::from_code(
-                    py,
-                    CString::new(python_functions.to_owned())
-                        .map_err(|e| SimulationError::PythonError {
-                            source: e.into(),
-                            err_msg: "Problème de lecture des fonctions Python".into(),
-                        })?
-                        .as_c_str(),
-                    c_str!("composantemodule.py"),
-                    c_str!("composantemodule"),
-                )
-                .map_err(|e| SimulationError::PythonError {
-                    source: e,
-                    err_msg: "Erreur à la création du module Python".into(),
-                })?;
+        Python::initialize();
 
-                let params_dict_py =
-                    self.parameters_values
-                        .clone()
-                        .into_py_dict(py)
-                        .map_err(|e| SimulationError::PythonError {
-                            source: e,
-                            err_msg: "Erreur pour dictionnaire de paramètres".into(),
-                        })?;
+        let output = Python::attach(|py| -> PyResult<Vec<HashMap<String, f64>>> {
+            let params_dict_py = self.parameters_values.clone().into_py_dict(py)?;
 
-                let py_menages_dicts: KalkotoResult<Vec<Bound<'_, PyDict>>> = menages
+            let menages_dicts = PyList::new(
+                py,
+                &menages
                     .iter()
-                    .map(|menage| {
-                        menage
-                            .caracteristiques
-                            .clone()
-                            .into_py_dict(py)
-                            .map_err(|e| SimulationError::PythonError {
-                                source: e,
-                                err_msg: "Erreur pour dictionnaire de caractéristiques des ménages"
-                                    .into(),
-                            })
-                            .map_err(KalkotoError::from)
-                    })
-                    .collect();
+                    .map(|menage| menage.caracteristiques.clone().into_py_dict(py))
+                    .collect::<PyResult<Vec<_>>>()?,
+            )?;
 
-                let py_menages_dicts = py_menages_dicts?;
-
-                let mut py_variables_dicts: KalkotoResult<Vec<Bound<'_, PyDict>>> =
-                    vec_variables_dict
-                        .iter()
-                        .map(|dict| {
-                            dict.clone()
-                                .into_py_dict(py)
-                                .map_err(|e| SimulationError::PythonError {
-                                    source: e,
-                                    err_msg: "Erreur pour dictionnaire de variables des ménages"
-                                        .into(),
-                                })
-                                .map_err(KalkotoError::from)
-                        })
-                        .collect();
-
-                let mut py_variables_dicts = py_variables_dicts?;
-
-                self.composantes_ordonnees
+            let mut variables_dicts = PyList::new(
+                py,
+                vec_variables_dict
                     .iter()
-                    .try_for_each(|composante: &Composante| {
-                        composante.simulate_all_menages(
-                            py,
-                            &py_menages_dicts,
-                            &mut py_variables_dicts,
-                            &params_dict_py,
-                            &composantemodule,
-                        )
-                    })?;
+                    .map(|dict| dict.clone().into_py_dict(py))
+                    .collect::<PyResult<Vec<_>>>()?,
+            )?;
 
-                let final_results_variables_dict: KalkotoResult<Vec<HashMap<String, f64>>> =
-                    py_variables_dicts
-                        .into_iter()
-                        .map(|result_wrapper| {
-                            result_wrapper
-                                .extract::<HashMap<String, f64>>()
-                                .map_err(|e| SimulationError::PythonError {
-                                    source: e,
-                                    err_msg: "Erreur à l'extraction des résultats depuis Python"
-                                        .into(),
-                                })
-                                .map_err(KalkotoError::from)
-                        })
-                        .collect();
+            let policy_py_module = PyModule::from_code(
+                py,
+                CString::new(policy_py_module)?.as_c_str(),
+                c_str!("composantemodule.py"),
+                c_str!("composantemodule"),
+            )?;
 
-                final_results_variables_dict
-            })?;
+            let num_workers = thread::available_parallelism()
+                .map(|n| n.get())
+                .unwrap_or(4);
 
-            Ok(output)
-        } else {
-            Err(KalkotoError::PolicyError(PolicyAdapterError::Generic(
-                "Fichier policy pas encore lu ! Les fonctions Python ne sont pas initialisées"
-                    .into(),
-            )))
-        }
+            let mp = py.import("multiprocessing")?;
+            let pool = mp.getattr("Pool")?.call1((num_workers,))?; // Création du pool de 3 workers
+
+            let nombre_menages = menages_dicts.len();
+
+            // Formule recommandée: nombre_menages / (num_workers * 4)
+            // Le facteur 4 permet d'avoir environ 4 chunks par worker
+            // Cela équilibre la charge tout en minimisant l'overhead
+            let chunksize = (nombre_menages / (num_workers * 2)).max(1);
+
+            let results = self
+                .composantes_ordonnees
+                .iter()
+                .map(|composante: &Composante| {
+                    composante.simulate_all_menages(
+                        chunksize,
+                        &menages_dicts,
+                        &mut variables_dicts,
+                        &params_dict_py,
+                        &policy_py_module,
+                        &pool,
+                    )
+                })
+                .collect::<PyResult<Vec<_>>>()?;
+
+            variables_dicts.extract()
+        });
+
+        let output = output.map_err(|e| {
+            KalkotoError::from(SimulationError::PythonError {
+                source: e,
+                err_msg: "Erreur extraction".into(),
+            })
+        })?;
+
+        Ok(output)
     }
 }
