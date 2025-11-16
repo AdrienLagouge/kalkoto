@@ -200,10 +200,10 @@ impl SimulatorBuilder<ValidMenageInput, ValidBaselineInput, ValidVarianteInput> 
         Ok(())
     }
 
-    pub fn export_variante<O: OutputWriter>(
-        &self,
-        output_adapter: &O,
+    pub fn export_variante_and_diff<O: OutputWriter>(
+        self,
+        output_adapter: O,
     ) -> KalkotoResult<()> {
-        output_adapter.export_variante_results(self)
+        output_adapter.export_variante_and_diff_results(self)
     }
 }
