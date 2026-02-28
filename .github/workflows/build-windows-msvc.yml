@@ -36,6 +36,6 @@ jobs:
       with:
         name: windows-msvc-build
         path: target/x86_64-pc-windows-msvc/release/
-name: Build Windows MSVC
+
 
 
