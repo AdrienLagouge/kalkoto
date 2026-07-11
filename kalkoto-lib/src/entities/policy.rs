@@ -68,11 +68,11 @@ impl Composante {
                     py_menage_caract_dict,
                 );
 
-                let result = rustfunc.call(args, None);
+                let result = rustfunc.call1(args);
 
                 match result {
                     Ok(result) => {
-                        (*py_menage_variables_dict).set_item(self.name.to_owned(), result);
+                        (*py_menage_variables_dict).set_item(&self.name, result);
                         Ok(())
                     }
                     Err(e) => Err(SimulationError::PythonError {
